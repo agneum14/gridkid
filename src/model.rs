@@ -16,6 +16,10 @@ pub enum Token {
     Div(Box<Token>, Box<Token>),
     Mod(Box<Token>, Box<Token>),
     Exp(Box<Token>, Box<Token>),
+
+    // casting
+    CastToInt(Box<Token>),
+    CastToFloat(Box<Token>),
 }
 
 impl Display for Token {
@@ -30,17 +34,31 @@ impl Display for Token {
             Self::Div(_, _) => write!(f, "Div"),
             Self::Mod(_, _) => write!(f, "Mod"),
             Self::Exp(_, _) => write!(f, "Exp"),
+            Self::CastToInt(_) => write!(f, "CastToInt"),
+            Self::CastToFloat(_) => write!(f, "CastToFloat"),
         }
     }
 }
 
 impl Token {
+    /// Converts an IntPrim and a FloatPrim to FloatPrims. Other tokens are unchanged.
+    fn coerce(a: &Token, b: &Token) -> (Token, Token) {
+        if let (Token::IntPrim(av), Token::FloatPrim(_)) = (a, b) {
+            (Token::FloatPrim(*av as f64), b.clone())
+        } else if let (Token::FloatPrim(_), Token::IntPrim(bv)) = (a, b) {
+            (a.clone(), Token::FloatPrim(*bv as f64))
+        } else {
+            (a.clone(), b.clone())
+        }
+    }
+
     /// Evaluate a Token, recursing through the AST
     pub fn eval(&self) -> Result<Token> {
         match self {
             Self::IntPrim(_) | Self::FloatPrim(_) | Self::BoolPrim(_) => Ok(self.clone()),
             Self::Add(a, b) => {
                 let (a, b) = &(a.eval()?, b.eval()?);
+                let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::IntPrim(av + bv)),
                     (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::FloatPrim(av + bv)),
@@ -49,6 +67,7 @@ impl Token {
             }
             Self::Sub(a, b) => {
                 let (a, b) = &(a.eval()?, b.eval()?);
+                let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::IntPrim(av - bv)),
                     (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::FloatPrim(av - bv)),
@@ -57,6 +76,7 @@ impl Token {
             }
             Self::Mult(a, b) => {
                 let (a, b) = &(a.eval()?, b.eval()?);
+                let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::IntPrim(av * bv)),
                     (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::FloatPrim(av * bv)),
@@ -65,6 +85,7 @@ impl Token {
             }
             Self::Div(a, b) => {
                 let (a, b) = &(a.eval()?, b.eval()?);
+                let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::IntPrim(av / bv)),
                     (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::FloatPrim(av / bv)),
@@ -96,6 +117,22 @@ impl Token {
                     _ => bail!("cannot exponentiate types {} and {}", a, b),
                 }
             }
+            Self::CastToInt(a) => {
+                let a = &a.eval()?;
+                match a {
+                    Token::IntPrim(_) => Ok(a.clone()),
+                    Token::FloatPrim(v) => Ok(Token::IntPrim(*v as i64)),
+                    _ => bail!("cannot cast type {} to FloatPrim", a),
+                }
+            }
+            Self::CastToFloat(a) => {
+                let a = &a.eval()?;
+                match a {
+                    Token::IntPrim(v) => Ok(Token::FloatPrim(*v as f64)),
+                    Token::FloatPrim(_) => Ok(a.clone()),
+                    _ => bail!("cannot cast type {} to FloatPrim", a),
+                }
+            }
         }
     }
 }
@@ -112,5 +149,14 @@ mod tests {
         let x = Token::Mod(Box::new(x), Box::new(Token::IntPrim(12)));
         let x = x.eval().unwrap();
         assert_eq!(Token::IntPrim(7), x);
+    }
+
+    // float(7) / 2 = 3.5
+    #[test]
+    fn casting() {
+        let x = Token::CastToFloat(Box::new(Token::IntPrim(7)));
+        let x = Token::Div(Box::new(x), Box::new(Token::IntPrim(2)));
+        let x = x.eval().unwrap();
+        assert_eq!(Token::FloatPrim(3.5), x);
     }
 }
