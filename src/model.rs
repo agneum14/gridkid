@@ -17,6 +17,19 @@ pub enum Token {
     Mod(Box<Token>, Box<Token>),
     Exp(Box<Token>, Box<Token>),
 
+    // logical
+    LogicAnd(Box<Token>, Box<Token>),
+    LogicOr(Box<Token>, Box<Token>),
+    LogicNot(Box<Token>),
+
+    // relational
+    Equals(Box<Token>, Box<Token>),
+    NotEquals(Box<Token>, Box<Token>),
+    LessThan(Box<Token>, Box<Token>),
+    LessThanOrEquals(Box<Token>, Box<Token>),
+    GreaterThan(Box<Token>, Box<Token>),
+    GreaterThanOrEquals(Box<Token>, Box<Token>),
+
     // casting
     CastToInt(Box<Token>),
     CastToFloat(Box<Token>),
@@ -34,6 +47,15 @@ impl Display for Token {
             Self::Div(_, _) => write!(f, "Div"),
             Self::Mod(_, _) => write!(f, "Mod"),
             Self::Exp(_, _) => write!(f, "Exp"),
+            Self::LogicAnd(_, _) => write!(f, "LogicAnd"),
+            Self::LogicOr(_, _) => write!(f, "LogicOr"),
+            Self::LogicNot(_) => write!(f, "LogicNot"),
+            Self::Equals(_, _) => write!(f, "Equals"),
+            Self::NotEquals(_, _) => write!(f, "NotEquals"),
+            Self::LessThan(_, _) => write!(f, "LessThan"),
+            Self::LessThanOrEquals(_, _) => write!(f, "LessThanOrEquals"),
+            Self::GreaterThan(_, _) => write!(f, "GreaterThan"),
+            Self::GreaterThanOrEquals(_, _) => write!(f, "GreaterThanOrEquals"),
             Self::CastToInt(_) => write!(f, "CastToInt"),
             Self::CastToFloat(_) => write!(f, "CastToFloat"),
         }
@@ -117,6 +139,27 @@ impl Token {
                     _ => bail!("cannot exponentiate types {} and {}", a, b),
                 }
             }
+            Self::LogicAnd(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                match (a, b) {
+                    (Token::BoolPrim(av), Token::BoolPrim(bv)) => Ok(Token::BoolPrim(*av && *bv)),
+                    _ => bail!("cannot logic and types {} and {}", a, b),
+                }
+            }
+            Self::LogicOr(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                match (a, b) {
+                    (Token::BoolPrim(av), Token::BoolPrim(bv)) => Ok(Token::BoolPrim(*av || *bv)),
+                    _ => bail!("cannot logic or types {} and {}", a, b),
+                }
+            }
+            Self::LogicNot(a) => {
+                let a = &a.eval()?;
+                match a {
+                    Token::BoolPrim(av) => Ok(Token::BoolPrim(!av)),
+                    _ => bail!("cannot logic not type {}", a),
+                }
+            }
             Self::CastToInt(a) => {
                 let a = &a.eval()?;
                 match a {
@@ -131,6 +174,60 @@ impl Token {
                     Token::IntPrim(v) => Ok(Token::FloatPrim(*v as f64)),
                     Token::FloatPrim(_) => Ok(a.clone()),
                     _ => bail!("cannot cast type {} to FloatPrim", a),
+                }
+            }
+            Self::Equals(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                let (a, b) = &Self::coerce(a, b);
+                match (a, b) {
+                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av == bv)),
+                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av == bv)),
+                    _ => bail!("cannot check equality for types {} and {}", a, b),
+                }
+            }
+            Self::NotEquals(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                let (a, b) = &Self::coerce(a, b);
+                match (a, b) {
+                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av != bv)),
+                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av != bv)),
+                    _ => bail!("cannot check equality for types {} and {}", a, b),
+                }
+            }
+            Self::LessThan(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                let (a, b) = &Self::coerce(a, b);
+                match (a, b) {
+                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av < bv)),
+                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av < bv)),
+                    _ => bail!("cannot check equality for types {} and {}", a, b),
+                }
+            }
+            Self::LessThanOrEquals(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                let (a, b) = &Self::coerce(a, b);
+                match (a, b) {
+                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av <= bv)),
+                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av <= bv)),
+                    _ => bail!("cannot check equality for types {} and {}", a, b),
+                }
+            }
+            Self::GreaterThan(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                let (a, b) = &Self::coerce(a, b);
+                match (a, b) {
+                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av > bv)),
+                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av > bv)),
+                    _ => bail!("cannot check equality for types {} and {}", a, b),
+                }
+            }
+            Self::GreaterThanOrEquals(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                let (a, b) = &Self::coerce(a, b);
+                match (a, b) {
+                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av >= bv)),
+                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av >= bv)),
+                    _ => bail!("cannot check equality for types {} and {}", a, b),
                 }
             }
         }
@@ -151,7 +248,19 @@ mod tests {
         assert_eq!(Token::IntPrim(7), x);
     }
 
-    // float(7) / 2 = 3.5
+    /// !(3.3 > 3.2)
+    #[test]
+    fn logic_cmp() {
+        let x = Token::GreaterThan(
+            Box::new(Token::FloatPrim(3.3)),
+            Box::new(Token::FloatPrim(3.2)),
+        );
+        let x = Token::LogicNot(Box::new(x));
+        let x = x.eval().unwrap();
+        assert_eq!(Token::BoolPrim(false), x);
+    }
+
+    /// float(7) / 2 = 3.5
     #[test]
     fn casting() {
         let x = Token::CastToFloat(Box::new(Token::IntPrim(7)));
