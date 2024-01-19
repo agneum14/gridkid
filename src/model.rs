@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Deref};
 
 use anyhow::{bail, Result};
 
@@ -21,6 +21,14 @@ pub enum Token {
     LogicAnd(Box<Token>, Box<Token>),
     LogicOr(Box<Token>, Box<Token>),
     LogicNot(Box<Token>),
+
+    // bitwise
+    BitwiseAnd(Box<Token>, Box<Token>),
+    BitwiseOr(Box<Token>, Box<Token>),
+    BitwiseXor(Box<Token>, Box<Token>),
+    BitwiseNot(Box<Token>),
+    BitwiseLeftShift(Box<Token>, Box<Token>),
+    BitwiseRightShift(Box<Token>, Box<Token>),
 
     // relational
     Equals(Box<Token>, Box<Token>),
@@ -50,6 +58,12 @@ impl Display for Token {
             Self::LogicAnd(_, _) => write!(f, "LogicAnd"),
             Self::LogicOr(_, _) => write!(f, "LogicOr"),
             Self::LogicNot(_) => write!(f, "LogicNot"),
+            Self::BitwiseAnd(_, _) => write!(f, "BitwiseAnd"),
+            Self::BitwiseOr(_, _) => write!(f, "BitwiseOr"),
+            Self::BitwiseXor(_, _) => write!(f, "BitwiseXor"),
+            Self::BitwiseNot(_) => write!(f, "BitwiseNot"),
+            Self::BitwiseLeftShift(_, _) => write!(f, "BitwiseLeftShift"),
+            Self::BitwiseRightShift(_, _) => write!(f, "BitwiseRightShift"),
             Self::Equals(_, _) => write!(f, "Equals"),
             Self::NotEquals(_, _) => write!(f, "NotEquals"),
             Self::LessThan(_, _) => write!(f, "LessThan"),
@@ -158,6 +172,48 @@ impl Token {
                 match a {
                     Token::BoolPrim(av) => Ok(Token::BoolPrim(!av)),
                     _ => bail!("cannot logic not type {}", a),
+                }
+            }
+            Self::BitwiseAnd(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                match (a, b) {
+                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Self::IntPrim(av & bv)),
+                    _ => bail!("cannot bitwise and types {} and {}", a, b),
+                }
+            }
+            Self::BitwiseOr(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                match (a, b) {
+                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Self::IntPrim(av | bv)),
+                    _ => bail!("cannot bitwise or types {} and {}", a, b),
+                }
+            }
+            Self::BitwiseXor(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                match (a, b) {
+                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Self::IntPrim(av ^ bv)),
+                    _ => bail!("cannot bitwise xor types {} and {}", a, b),
+                }
+            }
+            Self::BitwiseNot(a) => {
+                let a = &a.eval()?;
+                match a {
+                    Token::IntPrim(av) => Ok(Token::IntPrim(!av)),
+                    _ => bail!("cannot bitwise not type {}", a),
+                }
+            }
+            Self::BitwiseLeftShift(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                match (a, b) {
+                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Self::IntPrim(av << bv)),
+                    _ => bail!("cannot left shift types {} and {}", a, b),
+                }
+            }
+            Self::BitwiseRightShift(a, b) => {
+                let (a, b) = &(a.eval()?, b.eval()?);
+                match (a, b) {
+                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Self::IntPrim(av >> bv)),
+                    _ => bail!("cannot right shift types {} and {}", a, b),
                 }
             }
             Self::CastToInt(a) => {
