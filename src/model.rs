@@ -130,6 +130,7 @@ pub enum Token {
     IntPrim(i64),
     FloatPrim(f64),
     BoolPrim(bool),
+    StringPrim(String),
     AddrPrim(usize, usize),
 
     // arithmetic
@@ -180,8 +181,9 @@ impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::IntPrim(v) => write!(f, "IntPrim({})", v),
-            Self::FloatPrim(_) => write!(f, "FloatPrim"),
-            Self::BoolPrim(_) => write!(f, "BoolPrim"),
+            Self::FloatPrim(v) => write!(f, "FloatPrim({})", v),
+            Self::BoolPrim(v) => write!(f, "BoolPrim({})", v),
+            Self::StringPrim(v) => write!(f, "StringPrim({})", v),
             Self::AddrPrim(_, _) => write!(f, "BoolPrim"),
             Self::Add(_, _) => write!(f, "Add"),
             Self::Sub(_, _) => write!(f, "Sub"),
@@ -249,9 +251,11 @@ impl Token {
     /// Evaluate a Token, recursing through the AST
     pub fn eval(&self, runtime: &Runtime) -> Result<Token> {
         match self {
-            Self::IntPrim(_) | Self::FloatPrim(_) | Self::BoolPrim(_) | Self::AddrPrim(_, _) => {
-                Ok(self.clone())
-            }
+            Self::IntPrim(_)
+            | Self::FloatPrim(_)
+            | Self::BoolPrim(_)
+            | Self::StringPrim(_)
+            | Self::AddrPrim(_, _) => Ok(self.clone()),
             Self::Add(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let (a, b) = &Self::coerce(a, b);
@@ -508,6 +512,7 @@ impl Token {
             Self::IntPrim(a) => format!("{}", a),
             Self::FloatPrim(a) => format!("{}", a),
             Self::BoolPrim(a) => format!("{}", a),
+            Self::StringPrim(a) => format!("\"{}\"", a),
             Self::AddrPrim(a, b) => format!("[{}, {}]", a, b),
             Self::Add(a, b) => format!("({} + {})", a.serialize(), b.serialize()),
             Self::Sub(a, b) => format!("({} - {})", a.serialize(), b.serialize()),
