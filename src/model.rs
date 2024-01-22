@@ -126,7 +126,7 @@ impl Runtime {
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Token {
-    // primatives
+    // primitives
     IntPrim(i64),
     FloatPrim(f64),
     BoolPrim(bool),
