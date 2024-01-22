@@ -1,7 +1,5 @@
-use std::{
-    fmt::{format, Display},
-    ops::Deref,
-};
+use std::fmt::Display;
+
 
 use anyhow::{bail, ensure, Context, Result};
 
@@ -414,6 +412,40 @@ impl Token {
             }
         }
     }
+
+    /// Serialize a Token, recursing through the AST
+    fn serialize(&self) -> String {
+        match self {
+            Self::IntPrim(a) => format!("{}", a),
+            Self::FloatPrim(a) => format!("{}", a),
+            Self::BoolPrim(a) => format!("{}", a),
+            Self::AddrPrim(a, b) => format!("[{}, {}]", a, b),
+            Self::Add(a, b) => format!("({} + {})", a.serialize(), b.serialize()),
+            Self::Sub(a, b) => format!("({} - {})", a.serialize(), b.serialize()),
+            Self::Mult(a, b) => format!("({} * {})", a.serialize(), b.serialize()),
+            Self::Div(a, b) => format!("({} / {})", a.serialize(), b.serialize()),
+            Self::Exp(a, b) => format!("({}^{})", a.serialize(), b.serialize()),
+            Self::Mod(a, b) => format!("({} % {})", a.serialize(), b.serialize()),
+            Self::LogicAnd(a, b) => format!("({} && {})", a.serialize(), b.serialize()),
+            Self::LogicOr(a, b) => format!("({} || {})", a.serialize(), b.serialize()),
+            Self::LogicNot(a) => format!("!{}", a.serialize()),
+            Self::RValue(a, b) => format!("#[{}, {}]", a.serialize(), b.serialize()),
+            Self::BitwiseAnd(a, b) => format!("({} & {})", a.serialize(), b.serialize()),
+            Self::BitwiseOr(a, b) => format!("({} | {})", a.serialize(), b.serialize()),
+            Self::BitwiseXor(a, b) => format!("({} | {})", a.serialize(), b.serialize()),
+            Self::BitwiseNot(a) => format!("!{}", a.serialize()),
+            Self::BitwiseLeftShift(a, b) => format!("({} << {})", a.serialize(), b.serialize()),
+            Self::BitwiseRightShift(a, b) => format!("({} >> {})", a.serialize(), b.serialize()),
+            Self::Equals(a, b) => format!("({} == {})", a.serialize(), b.serialize()),
+            Self::NotEquals(a, b) => format!("({} != {})", a.serialize(), b.serialize()),
+            Self::LessThan(a, b) => format!("({} < {})", a.serialize(), b.serialize()),
+            Self::LessThanOrEquals(a, b) => format!("({} <= {})", a.serialize(), b.serialize()),
+            Self::GreaterThan(a, b) => format!("({} > {})", a.serialize(), b.serialize()),
+            Self::GreaterThanOrEquals(a, b) => format!("({} >= {})", a.serialize(), b.serialize()),
+            Self::CastToInt(a) => format!("int({})", a.serialize()),
+            Self::CastToFloat(a) => format!("float({})", a.serialize()),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -446,6 +478,7 @@ mod tests {
         assert_eq!(Token::IntPrim(40), x);
     }
 
+    /// #[0, 0] < #[0, 1]
     #[test]
     fn rvalue_cmp() {
         // store 1 in (0, 0) and 7 in (0, 1)
@@ -483,5 +516,66 @@ mod tests {
         let x = Token::Div(Box::new(x), Box::new(Token::IntPrim(2)));
         let x = x.eval(&Runtime::default()).unwrap();
         assert_eq!(Token::FloatPrim(3.5), x);
+    }
+
+    /// (7 * 4 + 3) % 12 = 7
+    #[test]
+    fn arithmetic_serialize() {
+        let x = Token::Mult(Box::new(Token::IntPrim(7)), Box::new(Token::IntPrim(4)));
+        let x = Token::Add(Box::new(x), Box::new(Token::IntPrim(3)));
+        let x = Token::Mod(Box::new(x), Box::new(Token::IntPrim(12)));
+        assert_eq!("(((7 * 4) + 3) % 12)", x.serialize());
+    }
+
+    // #[1 + 1, 4] << 3
+    #[test]
+    fn rvalue_shift_serialize() {
+        // store 5 in (2, 4)
+        let mut runtime = Runtime::default();
+        runtime
+            .set_cell(&Token::AddrPrim(2, 4), &Token::IntPrim(5))
+            .unwrap();
+
+        let x = Token::Add(Box::new(Token::IntPrim(1)), Box::new(Token::IntPrim(1)));
+        let x = Token::RValue(Box::new(x), Box::new(Token::IntPrim(4)));
+        let x = Token::BitwiseLeftShift(Box::new(x), Box::new(Token::IntPrim(3)));
+        assert_eq!("(#[(1 + 1), 4] << 3)", x.serialize());
+    }
+
+    /// #[0, 0] < #[0, 1]
+    #[test]
+    fn rvalue_cmp_serialize() {
+        // store 1 in (0, 0) and 7 in (0, 1)
+        let mut runtime = Runtime::default();
+        runtime
+            .set_cell(&Token::AddrPrim(0, 0), &Token::IntPrim(1))
+            .unwrap();
+        runtime
+            .set_cell(&Token::AddrPrim(0, 1), &Token::IntPrim(7))
+            .unwrap();
+
+        let x = Token::RValue(Box::new(Token::IntPrim(0)), Box::new(Token::IntPrim(0)));
+        let y = Token::RValue(Box::new(Token::IntPrim(0)), Box::new(Token::IntPrim(1)));
+        let res = Token::LessThan(Box::new(x), Box::new(y));
+        assert_eq!("(#[0, 0] < #[0, 1])", res.serialize())
+    }
+
+    /// !(3.3 > 3.2)
+    #[test]
+    fn logic_cmp_serialize() {
+        let x = Token::GreaterThan(
+            Box::new(Token::FloatPrim(3.3)),
+            Box::new(Token::FloatPrim(3.2)),
+        );
+        let x = Token::LogicNot(Box::new(x));
+        assert_eq!("!(3.3 > 3.2)", x.serialize());
+    }
+
+    /// float(7) / 2 = 3.5
+    #[test]
+    fn casting_serialize() {
+        let x = Token::CastToFloat(Box::new(Token::IntPrim(7)));
+        let x = Token::Div(Box::new(x), Box::new(Token::IntPrim(2)));
+        assert_eq!("(float(7) / 2)", x.serialize());
     }
 }
