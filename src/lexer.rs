@@ -41,12 +41,14 @@ pub enum LexemeKind {
 pub struct Lexeme {
     pub src: String,
     pub kind: LexemeKind,
+    pub start: usize
 }
 
 struct Lexer {
     tokens: Vec<Lexeme>,
     token_so_far: String,
     i: usize,
+    start: usize,
     src: Box<[char]>,
 }
 
@@ -56,6 +58,7 @@ impl Lexer {
             tokens: Vec::new(),
             token_so_far: "".to_string(),
             i: 0,
+            start: 0,
             src: src.chars().collect(),
         }
     }
@@ -68,6 +71,7 @@ impl Lexer {
         let token = Lexeme {
             src: self.token_so_far.to_owned(),
             kind,
+            start: self.start
         };
         self.tokens.push(token);
         self.token_so_far.clear();
@@ -104,7 +108,7 @@ impl Lexer {
                 return Ok(());
             }
         }
-        bail!("expected {} at index {}", targ, self.i)
+        bail!("expected '{}' at position {}", targ, self.i)
     }
 
     fn cap_digit(&mut self) -> Result<()> {
@@ -114,7 +118,7 @@ impl Lexer {
                 return Ok(());
             }
         }
-        bail!("expected digit at index {}", self.i)
+        bail!("expected digit at position {}", self.i)
     }
 
     fn cap_emit(&mut self, kind: LexemeKind) {
@@ -122,8 +126,16 @@ impl Lexer {
         self.emit_token(kind);
     }
 
+    fn is_alphabetic(&self) -> bool {
+        if let Some(c) = self.get() {
+            return c.is_alphabetic();
+        }
+        false
+    }
+
     fn lex(&mut self) -> Result<()> {
         while self.i < self.src.len() {
+            self.start = self.i;
             match self.src.get(self.i).unwrap() {
                 '+' => self.cap_emit(LexemeKind::Add),
                 '-' => self.cap_emit(LexemeKind::Sub),
@@ -202,9 +214,9 @@ impl Lexer {
                         self.emit_token(LexemeKind::Int);
                     }
                 }
-                &c if c.is_alphabetic() => {
+                _ if self.is_alphabetic() => {
                     self.cap();
-                    while c.is_alphabetic() {
+                    while self.is_alphabetic() {
                         self.cap();
                     }
 
@@ -212,7 +224,7 @@ impl Lexer {
                         "float" => self.emit_token(LexemeKind::FloatCast),
                         "int" => self.emit_token(LexemeKind::IntCast),
                         "false" | "true" => self.emit_token(LexemeKind::Bool),
-                        _ => bail!("unknown identifier"),
+                        _ => bail!("unknown identifier \"{}\" starting at position {}", self.token_so_far, self.start),
                     }
                 }
                 '"' => {
@@ -228,7 +240,7 @@ impl Lexer {
                     self.emit_token(LexemeKind::Str);
                 }
                 &c if c.is_whitespace() => self.i += 1,
-                &c => bail!("invalid char {} at position {}", c, self.i),
+                &c => bail!("invalid lexeme '{}' starting at position {}", c, self.i),
             }
         }
 
