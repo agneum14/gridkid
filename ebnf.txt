@@ -1,0 +1,23 @@
+expr        = logic_or
+
+logic_or    = logic_and { "||" logic_and }
+logic_and   = bit_or { "&&" bit_or }
+bit_or      = bit_xor { "|" bit_xor }
+bit_xor     = bit_and { "^", bit_and }
+bit_and     = eq { "&" eq }
+eq          = meq { ( "==" "!=" ) meq }
+meq         = shift { ( "<" "<=" ">" ">=" ) shift }
+shift       = add { ( ">>" "<<" ) add }
+add         = mult { ( "+" "-" ) mult }
+mult        = exp { ( "*" "/" "%" ) exp }
+exp         = unary { "*" "*" unary }
+unary       = primary { ( "!" | "~" ) primary }
+
+paren_expr  = "(" expr ")"
+float_cast  = "float" paren_expr
+int_cast    = "int" paren_expr
+rvalue      = "#" "[" expr "," expr "]"
+lvalue      = "[" expr "," expr "]"
+
+primary     = INT | FLOAT | BOOL | STR | float_cast | int_cast | rvalue 
+            | lvalue | paren_expr
