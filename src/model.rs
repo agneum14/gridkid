@@ -56,7 +56,7 @@ impl Grid {
     }
 }
 
-struct Runtime {
+pub struct Runtime {
     grid: Grid,
 }
 
