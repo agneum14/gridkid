@@ -16,7 +16,10 @@ impl Parser {
         match operator {
             LexemeKind::LogicNot => Token::LogicNot(Box::new(right)),
             LexemeKind::BitNot => Token::BitwiseNot(Box::new(right)),
-            _ => panic!("tried to create a unary tree with invalid operator {:?}", operator),
+            _ => panic!(
+                "tried to create a unary tree with invalid operator {:?}",
+                operator
+            ),
         }
     }
 
@@ -37,19 +40,18 @@ impl Parser {
             LexemeKind::GreaterThanOrEqualTo => {
                 Token::GreaterThanOrEquals(Box::new(left), Box::new(right))
             }
-            LexemeKind::BitshiftLeft => {
-                Token::BitwiseLeftShift(Box::new(left), Box::new(right))
-            }
-            LexemeKind::BitshiftRight => {
-                Token::BitwiseRightShift(Box::new(left), Box::new(right))
-            }
+            LexemeKind::BitshiftLeft => Token::BitwiseLeftShift(Box::new(left), Box::new(right)),
+            LexemeKind::BitshiftRight => Token::BitwiseRightShift(Box::new(left), Box::new(right)),
             LexemeKind::Add => Token::Add(Box::new(left), Box::new(right)),
             LexemeKind::Sub => Token::Sub(Box::new(left), Box::new(right)),
             LexemeKind::Mult => Token::Mult(Box::new(left), Box::new(right)),
             LexemeKind::Div => Token::Div(Box::new(left), Box::new(right)),
             LexemeKind::Mod => Token::Mod(Box::new(left), Box::new(right)),
             LexemeKind::Exp => Token::Exp(Box::new(left), Box::new(right)),
-            _ => panic!("tried to create binary tree with invalid operator {:?}", operator),
+            _ => panic!(
+                "tried to create binary tree with invalid operator {:?}",
+                operator
+            ),
         }
     }
 
@@ -362,6 +364,15 @@ mod tests {
             .eval(&Runtime::default())
             .unwrap();
         assert_eq!(Token::IntPrim(6), res);
+    }
+
+    #[test]
+    fn comparisons() {
+        let res = parse("1 <= 1 && 1 < 2 && 2 >= 2 && 2 > 1 && 1 != 2")
+            .unwrap()
+            .eval(&Runtime::default())
+            .unwrap();
+        assert_eq!(Token::BoolPrim(true), res);
     }
 
     #[test]
