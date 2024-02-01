@@ -12,44 +12,44 @@ struct Parser {
 }
 
 impl Parser {
-    fn unary_tree(operator: &LexemeKind, right: Token) -> Result<Token> {
+    fn unary_tree(operator: &LexemeKind, right: Token) -> Token {
         match operator {
-            LexemeKind::LogicNot => Ok(Token::LogicNot(Box::new(right))),
-            LexemeKind::BitNot => Ok(Token::BitwiseNot(Box::new(right))),
-            _ => bail!("invalid unary operator"),
+            LexemeKind::LogicNot => Token::LogicNot(Box::new(right)),
+            LexemeKind::BitNot => Token::BitwiseNot(Box::new(right)),
+            _ => panic!("tried to create a unary tree with invalid operator {:?}", operator),
         }
     }
 
-    fn binary_tree(left: Token, operator: &LexemeKind, right: Token) -> Result<Token> {
+    fn binary_tree(left: Token, operator: &LexemeKind, right: Token) -> Token {
         match operator {
-            LexemeKind::LogicOr => Ok(Token::LogicOr(Box::new(left), Box::new(right))),
-            LexemeKind::LogicAnd => Ok(Token::LogicAnd(Box::new(left), Box::new(right))),
-            LexemeKind::BitOr => Ok(Token::BitwiseOr(Box::new(left), Box::new(right))),
-            LexemeKind::BitXor => Ok(Token::BitwiseXor(Box::new(left), Box::new(right))),
-            LexemeKind::BitAnd => Ok(Token::BitwiseAnd(Box::new(left), Box::new(right))),
-            LexemeKind::EqualTo => Ok(Token::Equals(Box::new(left), Box::new(right))),
-            LexemeKind::NotEqualTo => Ok(Token::NotEquals(Box::new(left), Box::new(right))),
-            LexemeKind::LessThan => Ok(Token::LessThan(Box::new(left), Box::new(right))),
+            LexemeKind::LogicOr => Token::LogicOr(Box::new(left), Box::new(right)),
+            LexemeKind::LogicAnd => Token::LogicAnd(Box::new(left), Box::new(right)),
+            LexemeKind::BitOr => Token::BitwiseOr(Box::new(left), Box::new(right)),
+            LexemeKind::BitXor => Token::BitwiseXor(Box::new(left), Box::new(right)),
+            LexemeKind::BitAnd => Token::BitwiseAnd(Box::new(left), Box::new(right)),
+            LexemeKind::EqualTo => Token::Equals(Box::new(left), Box::new(right)),
+            LexemeKind::NotEqualTo => Token::NotEquals(Box::new(left), Box::new(right)),
+            LexemeKind::LessThan => Token::LessThan(Box::new(left), Box::new(right)),
             LexemeKind::LessThanOrEqualTo => {
-                Ok(Token::LessThanOrEquals(Box::new(left), Box::new(right)))
+                Token::LessThanOrEquals(Box::new(left), Box::new(right))
             }
-            LexemeKind::GreaterThan => Ok(Token::GreaterThan(Box::new(left), Box::new(right))),
+            LexemeKind::GreaterThan => Token::GreaterThan(Box::new(left), Box::new(right)),
             LexemeKind::GreaterThanOrEqualTo => {
-                Ok(Token::GreaterThanOrEquals(Box::new(left), Box::new(right)))
+                Token::GreaterThanOrEquals(Box::new(left), Box::new(right))
             }
             LexemeKind::BitshiftLeft => {
-                Ok(Token::BitwiseLeftShift(Box::new(left), Box::new(right)))
+                Token::BitwiseLeftShift(Box::new(left), Box::new(right))
             }
             LexemeKind::BitshiftRight => {
-                Ok(Token::BitwiseRightShift(Box::new(left), Box::new(right)))
+                Token::BitwiseRightShift(Box::new(left), Box::new(right))
             }
-            LexemeKind::Add => Ok(Token::Add(Box::new(left), Box::new(right))),
-            LexemeKind::Sub => Ok(Token::Sub(Box::new(left), Box::new(right))),
-            LexemeKind::Mult => Ok(Token::Mult(Box::new(left), Box::new(right))),
-            LexemeKind::Div => Ok(Token::Div(Box::new(left), Box::new(right))),
-            LexemeKind::Mod => Ok(Token::Mod(Box::new(left), Box::new(right))),
-            LexemeKind::Exp => Ok(Token::Exp(Box::new(left), Box::new(right))),
-            _ => bail!("tried to create binary tree with invalid operator"),
+            LexemeKind::Add => Token::Add(Box::new(left), Box::new(right)),
+            LexemeKind::Sub => Token::Sub(Box::new(left), Box::new(right)),
+            LexemeKind::Mult => Token::Mult(Box::new(left), Box::new(right)),
+            LexemeKind::Div => Token::Div(Box::new(left), Box::new(right)),
+            LexemeKind::Mod => Token::Mod(Box::new(left), Box::new(right)),
+            LexemeKind::Exp => Token::Exp(Box::new(left), Box::new(right)),
+            _ => panic!("tried to create binary tree with invalid operator {:?}", operator),
         }
     }
 
@@ -105,7 +105,7 @@ impl Parser {
         while self.check(&LexemeKind::LogicOr) {
             let operator = self.previous();
             let right = self.logic_and()?;
-            expr = Parser::binary_tree(expr, &operator, right)?;
+            expr = Parser::binary_tree(expr, &operator, right);
         }
         Ok(expr)
     }
@@ -115,7 +115,7 @@ impl Parser {
         while self.check(&LexemeKind::LogicAnd) {
             let operator = self.previous();
             let right = self.bit_or()?;
-            expr = Parser::binary_tree(expr, &operator, right)?;
+            expr = Parser::binary_tree(expr, &operator, right);
         }
         Ok(expr)
     }
@@ -124,7 +124,7 @@ impl Parser {
         while self.check(&LexemeKind::BitOr) {
             let operator = self.previous();
             let right = self.bit_and()?;
-            expr = Parser::binary_tree(expr, &operator, right)?;
+            expr = Parser::binary_tree(expr, &operator, right);
         }
         Ok(expr)
     }
@@ -134,7 +134,7 @@ impl Parser {
         while self.check(&LexemeKind::BitAnd) {
             let operator = self.previous();
             let right = self.eq()?;
-            expr = Parser::binary_tree(expr, &operator, right)?;
+            expr = Parser::binary_tree(expr, &operator, right);
         }
         Ok(expr)
     }
@@ -144,7 +144,7 @@ impl Parser {
         while self.check(&LexemeKind::EqualTo) || self.check(&LexemeKind::NotEqualTo) {
             let operator = self.previous();
             let right = self.meq()?;
-            expr = Parser::binary_tree(expr, &operator, right)?;
+            expr = Parser::binary_tree(expr, &operator, right);
         }
         Ok(expr)
     }
@@ -158,7 +158,7 @@ impl Parser {
         {
             let operator = self.previous();
             let right = self.shift()?;
-            expr = Parser::binary_tree(expr, &operator, right)?;
+            expr = Parser::binary_tree(expr, &operator, right);
         }
         Ok(expr)
     }
@@ -168,7 +168,7 @@ impl Parser {
         while self.check(&LexemeKind::BitshiftLeft) || self.check(&LexemeKind::BitshiftRight) {
             let operator = self.previous();
             let right = self.add()?;
-            expr = Parser::binary_tree(expr, &operator, right)?;
+            expr = Parser::binary_tree(expr, &operator, right);
         }
         Ok(expr)
     }
@@ -178,7 +178,7 @@ impl Parser {
         while self.check(&LexemeKind::Add) || self.check(&LexemeKind::Sub) {
             let operator = self.previous();
             let right = self.mult()?;
-            expr = Parser::binary_tree(expr, &operator, right)?;
+            expr = Parser::binary_tree(expr, &operator, right);
         }
         Ok(expr)
     }
@@ -191,7 +191,7 @@ impl Parser {
         {
             let operator = self.previous();
             let right = self.exp()?;
-            expr = Parser::binary_tree(expr, &operator, right)?;
+            expr = Parser::binary_tree(expr, &operator, right);
         }
         Ok(expr)
     }
@@ -201,7 +201,7 @@ impl Parser {
         if self.check(&LexemeKind::Exp) {
             let operator = self.previous();
             let right = self.exp()?;
-            expr = Parser::binary_tree(expr, &operator, right)?;
+            expr = Parser::binary_tree(expr, &operator, right);
         }
         Ok(expr)
     }
@@ -210,7 +210,7 @@ impl Parser {
         if self.check(&LexemeKind::LogicNot) || self.check(&LexemeKind::BitNot) {
             let operator = self.previous();
             let right = self.unary()?;
-            return Parser::unary_tree(&operator, right);
+            return Ok(Parser::unary_tree(&operator, right));
         }
 
         self.primary()
