@@ -329,7 +329,10 @@ mod tests {
 
     #[test]
     fn unary_int_paren() {
-        let res = parse("10 + ~(3)").unwrap().eval(&Runtime::default()).unwrap();
+        let res = parse("10 + ~(3)")
+            .unwrap()
+            .eval(&Runtime::default())
+            .unwrap();
         assert_eq!(Token::IntPrim(6), res);
     }
 }
