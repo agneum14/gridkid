@@ -202,7 +202,7 @@ impl Parser {
     }
 
     fn unary(&mut self) -> Result<Token> {
-        if self.check(&LexemeKind::Exp) {
+        if self.check(&LexemeKind::LogicNot) || self.check(&LexemeKind::BitNot) {
             let operator = self.previous();
             let right = self.unary()?;
             return Parser::unary_tree(&operator, right);
@@ -319,5 +319,17 @@ mod tests {
             .eval(&Runtime::default())
             .unwrap();
         assert_eq!(Token::IntPrim(18), res)
+    }
+
+    #[test]
+    fn unary_bool() {
+        let res = parse("!false").unwrap().eval(&Runtime::default()).unwrap();
+        assert_eq!(Token::BoolPrim(true), res);
+    }
+
+    #[test]
+    fn unary_int_paren() {
+        let res = parse("10 + ~(3)").unwrap().eval(&Runtime::default()).unwrap();
+        assert_eq!(Token::IntPrim(6), res);
     }
 }
