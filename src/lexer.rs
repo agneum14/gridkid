@@ -286,7 +286,7 @@ impl Lexer {
     }
 }
 
-fn diag(src: &Box<[char]>, label: &str, found: &str, pos: usize, extra: Option<&str>) -> String {
+pub fn diag(src: &Box<[char]>, label: &str, found: &str, pos: usize, extra: Option<&str>) -> String {
     let pad: String = (0..pos).into_iter().skip(1).map(|_| ' ').collect();
     let src: String = src.into_iter().collect();
     let mut msg = format!(

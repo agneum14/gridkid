@@ -1,13 +1,14 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 
 use crate::{
-    lexer::{lex, Lexeme, LexemeKind},
+    lexer::{diag as lexer_diag, lex, Lexeme, LexemeKind},
     model::Token,
 };
 
 struct Parser {
     lexemes: Vec<Lexeme>,
     i: usize,
+    src: String,
 }
 
 impl Parser {
@@ -66,8 +67,10 @@ impl Parser {
             .kind
     }
 
-    fn prev_lexeme(&self) -> &Lexeme {
-        self.lexemes.get(self.i - 1).expect("indexed lexemes at -1")
+    fn prev_lexeme(&self) -> Result<&Lexeme> {
+        self.lexemes
+            .get(self.i - 1)
+            .context(diag(self.src.as_str(), "None", self.src.len()))
     }
 
     fn advance(&mut self) {
@@ -85,9 +88,11 @@ impl Parser {
     }
 
     fn demand(&mut self, kind: &LexemeKind) -> Result<()> {
-        match self.check(kind) {
-            true => Ok(()),
-            false => bail!("tmp msg"),
+        if self.check(kind) {
+            Ok(())
+        } else {
+            let lexeme = self.prev_lexeme()?;
+            bail!(diag(self.src.as_str(), lexeme.src.as_str(), lexeme.start))
         }
     }
 
@@ -220,7 +225,7 @@ impl Parser {
 
     fn primary(&mut self) -> Result<Token> {
         self.advance();
-        let lexeme = self.prev_lexeme();
+        let lexeme = self.prev_lexeme()?;
 
         match lexeme.kind {
             LexemeKind::Int => {
@@ -273,15 +278,25 @@ impl Parser {
     }
 }
 
+fn diag(src: &str, found: &str, pos: usize) -> String {
+    let src: Box<[char]> = src.chars().collect();
+    lexer_diag(&src, "lexeme", found, pos, None)
+}
+
 pub fn parse(src: &str) -> Result<Token> {
     let lexemes = lex(src)?;
-    let mut parser = Parser { lexemes, i: 0 };
+    let mut parser = Parser {
+        lexemes,
+        i: 0,
+        src: src.to_string(),
+    };
     parser.expression()
 }
 
 #[cfg(test)]
 mod tests {
     use crate::model::Runtime;
+    use indoc::indoc;
 
     use super::*;
 
@@ -347,5 +362,33 @@ mod tests {
             .eval(&Runtime::default())
             .unwrap();
         assert_eq!(Token::IntPrim(6), res);
+    }
+
+    #[test]
+    fn invalid_end() {
+        let res = parse("2 + 2 + ");
+        let expected = indoc! {"
+            2 + 2 + 
+                    ^ <--- WRONG
+            invalid lexeme 'None' at position 8"};
+        if let Err(e) = res {
+            assert_eq!(expected, e.to_string());
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn invalid_lexeme() {
+        let res = parse("2 + 2 + ^ + 2");
+        let expected = indoc! {"
+            2 + 2 + ^ + 2
+                    ^ <--- WRONG
+            invalid lexeme '^' at position 8"};
+        if let Err(e) = res {
+            assert_eq!(expected, e.to_string());
+        } else {
+            assert!(false);
+        }
     }
 }
