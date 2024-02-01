@@ -80,7 +80,7 @@ impl Runtime {
     }
 
     /// Set a cell from an AddrPrim and AST
-    fn set_cell(&mut self, addr: &Token, ast: &Token) -> Result<()> {
+    pub fn set_cell(&mut self, addr: &Token, ast: &Token) -> Result<()> {
         let eval = ast.eval(self)?;
         let cell = self.cell_mut(addr)?;
         cell.ast = Some(ast.clone());
@@ -416,6 +416,7 @@ impl Token {
                 match (a, b) {
                     (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av == bv)),
                     (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av == bv)),
+                    (Token::BoolPrim(av), Token::BoolPrim(bv)) => Ok(Token::BoolPrim(av == bv)),
                     _ => bail!("cannot check equality for types {} and {}", a, b),
                 }
             }
@@ -425,6 +426,7 @@ impl Token {
                 match (a, b) {
                     (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av != bv)),
                     (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av != bv)),
+                    (Token::BoolPrim(av), Token::BoolPrim(bv)) => Ok(Token::BoolPrim(av != bv)),
                     _ => bail!("cannot check equality for types {} and {}", a, b),
                 }
             }

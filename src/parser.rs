@@ -313,6 +313,19 @@ mod tests {
     }
 
     #[test]
+    fn complex() {
+        let mut runtime = Runtime::default();
+        runtime
+            .set_cell(&Token::AddrPrim(9, 5), &Token::IntPrim(7))
+            .unwrap();
+        let res = parse("#[(1 ** 1 + 7 * (2 - ~1)) / 3, (1 << 2 | 3) ** 2 / 9] == 7 == 7 > 1")
+            .unwrap()
+            .eval(&runtime)
+            .unwrap();
+        assert_eq!(Token::BoolPrim(true), res);
+    }
+
+    #[test]
     fn paren() {
         let res = parse("2 * (2 + 7)")
             .unwrap()
