@@ -553,6 +553,8 @@ impl Token {
 mod tests {
     use rand::Rng;
 
+    use crate::parser::parse;
+
     use super::*;
 
     // Instantiate a Runtime with cells in the bounding box set to random IntPrims. Returns the
@@ -808,5 +810,31 @@ mod tests {
         let x = Token::Add(Box::new(Token::IntPrim(5)), Box::new(Token::BoolPrim(true)));
         let x = x.eval(&Runtime::default());
         assert!(x.is_err())
+    }
+
+    #[test]
+    fn invalid_addition() {
+        let x = parse("1 + true").unwrap().eval(&Runtime::default());
+        assert!(x.is_err())
+    }
+
+    #[test]
+    fn invalid_greater() {
+        let x = parse("\"Ruby\" > \"nearly any other language (for me)\"")
+            .unwrap()
+            .eval(&Runtime::default()); // notice this results in a error
+        assert!(x.is_err())
+    }
+
+    #[test]
+    fn invalid_lvalue() {
+        let x = parse("[1.5, 2]").unwrap().eval(&Runtime::default());
+        assert!(x.is_err())
+    }
+
+    #[test]
+    fn invalid_shift_left() {
+        let x = parse("1 << 2.0").unwrap().eval(&Runtime::default());
+        assert!(x.is_err());
     }
 }
