@@ -70,9 +70,12 @@ impl Parser {
     }
 
     fn prev_lexeme(&self) -> Result<&Lexeme> {
-        self.lexemes
-            .get(self.i - 1)
-            .context(diag(self.src.as_str(), "None", self.src.len()))
+        if self.i != 0 {
+            if let Some(v) = self.lexemes.get(self.i - 1) {
+                return Ok(v);
+            }
+        }
+        bail!(diag(self.src.as_str(), "None", self.src.len()))
     }
 
     fn advance(&mut self) {
@@ -396,6 +399,20 @@ mod tests {
             2 + 2 + ^ + 2
                     ^ <--- WRONG
             invalid lexeme '^' at position 8"};
+        if let Err(e) = res {
+            assert_eq!(expected, e.to_string());
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn invalid_single_op() {
+        let res = parse("+");
+        let expected = indoc! {"
+            +
+             ^ <--- WRONG
+            invalid lexeme 'None' at position 1"};
         if let Err(e) = res {
             assert_eq!(expected, e.to_string());
         } else {
