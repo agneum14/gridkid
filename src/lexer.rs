@@ -35,6 +35,10 @@ pub enum LexemeKind {
     Float,
     Bool,
     Str,
+    Min,
+    Max,
+    Mean,
+    Sum
 }
 
 #[derive(Debug)]
@@ -250,6 +254,10 @@ impl Lexer {
                         "float" => self.emit_lexeme(LexemeKind::FloatCast),
                         "int" => self.emit_lexeme(LexemeKind::IntCast),
                         "false" | "true" => self.emit_lexeme(LexemeKind::Bool),
+                        "max" => self.emit_lexeme(LexemeKind::Max),
+                        "min" => self.emit_lexeme(LexemeKind::Min),
+                        "mean" => self.emit_lexeme(LexemeKind::Mean),
+                        "sum" => self.emit_lexeme(LexemeKind::Sum),
                         _ => bail!(diag(
                             &self.src,
                             "identifier",

@@ -634,6 +634,15 @@ mod tests {
         assert_eq!(Token::IntPrim(sum), res)
     }
 
+    /// sum([1, 2], [5, 3])
+    #[test]
+    fn sum_parsed() {
+        let (runtime, nums) = build_runtime_grid(1, 2, 5, 3);
+        let res = parse("sum([1, 2], [5, 3])").unwrap().eval(&runtime).unwrap();
+        let sum = nums.iter().sum::<i64>();
+        assert_eq!(Token::IntPrim(sum), res)
+    }
+
     /// !(3.3 > 3.2)
     #[test]
     fn logic_cmp() {

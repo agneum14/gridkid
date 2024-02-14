@@ -228,6 +228,24 @@ impl Parser {
         Ok(inner)
     }
 
+    fn lvalue(&mut self) -> Result<Token> {
+        self.demand(&LexemeKind::LeftSquare)?;
+        let x = self.expression()?;
+        self.demand(&LexemeKind::Comma)?;
+        let y = self.expression()?;
+        self.demand(&LexemeKind::RightSquare)?;
+        Ok(Token::LValue(Box::new(x), Box::new(y)))
+    }
+
+    fn stat_inner(&mut self) -> Result<(Token, Token)> {
+        self.demand(&LexemeKind::LeftParen)?;
+        let left = self.lvalue()?;
+        self.demand(&LexemeKind::Comma)?;
+        let right = self.lvalue()?;
+        self.demand(&LexemeKind::RightParen)?;
+        Ok((left, right))
+    }
+
     fn primary(&mut self) -> Result<Token> {
         self.advance();
         let lexeme = self.prev_lexeme()?;
@@ -260,6 +278,17 @@ impl Parser {
                 let expr = self.paren_expression()?;
                 Ok(Token::CastToInt(Box::new(expr)))
             }
+            LexemeKind::Max | LexemeKind::Min | LexemeKind::Mean | LexemeKind::Sum => {
+                let stat = lexeme.kind.clone();
+                let (left, right) = self.stat_inner()?;
+                match stat {
+                    LexemeKind::Max => Ok(Token::Max(Box::new(left), Box::new(right))),
+                    LexemeKind::Min => Ok(Token::Min(Box::new(left), Box::new(right))),
+                    LexemeKind::Mean => Ok(Token::Mean(Box::new(left), Box::new(right))),
+                    LexemeKind::Sum => Ok(Token::Sum(Box::new(left), Box::new(right))),
+                    _ => unreachable!()
+                }
+            }
             LexemeKind::Pound => {
                 self.demand(&LexemeKind::LeftSquare)?;
                 let x = self.expression()?;
@@ -269,11 +298,8 @@ impl Parser {
                 Ok(Token::RValue(Box::new(x), Box::new(y)))
             }
             LexemeKind::LeftSquare => {
-                let x = self.expression()?;
-                self.demand(&LexemeKind::Comma)?;
-                let y = self.expression()?;
-                self.demand(&LexemeKind::RightSquare)?;
-                Ok(Token::LValue(Box::new(x), Box::new(y)))
+                self.i -= 1;
+                self.lvalue()
             }
             _ => {
                 self.i -= 1; // decrement because paren_expression demands "()"
