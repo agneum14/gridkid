@@ -16,8 +16,9 @@ unary       = primary { ( "!" | "~" ) primary }
 paren_expr  = "(" expr ")"
 float_cast  = "float" paren_expr
 int_cast    = "int" paren_expr
+stat        = ( "max" | "min" | "mean" | "sum" ) "(" lvalue "," lvalue ")"
 rvalue      = "#" "[" expr "," expr "]"
 lvalue      = "[" expr "," expr "]"
 
-primary     = INT | FLOAT | BOOL | STR | float_cast | int_cast | rvalue 
+primary     = INT | FLOAT | BOOL | STR | float_cast | int_cast | stat | rvalue 
             | lvalue | paren_expr
