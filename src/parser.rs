@@ -16,6 +16,8 @@ impl Parser {
         match operator {
             TokenKind::LogicNot => Expr::LogicNot(Box::new(right)),
             TokenKind::BitNot => Expr::BitwiseNot(Box::new(right)),
+            TokenKind::IntCast => Expr::CastToInt(Box::new(right)),
+            TokenKind::FloatCast => Expr::CastToFloat(Box::new(right)),
             _ => panic!(
                 "tried to create a unary tree with invalid operator {:?}",
                 operator
@@ -48,6 +50,10 @@ impl Parser {
             TokenKind::Div => Expr::Div(Box::new(left), Box::new(right)),
             TokenKind::Mod => Expr::Mod(Box::new(left), Box::new(right)),
             TokenKind::Exp => Expr::Exp(Box::new(left), Box::new(right)),
+            TokenKind::Max => Expr::Max(Box::new(left), Box::new(right)),
+            TokenKind::Min => Expr::Min(Box::new(left), Box::new(right)),
+            TokenKind::Mean => Expr::Mean(Box::new(left), Box::new(right)),
+            TokenKind::Sum => Expr::Sum(Box::new(left), Box::new(right)),
             _ => panic!(
                 "tried to create binary tree with invalid operator {:?}",
                 operator
@@ -270,24 +276,15 @@ impl Parser {
                 let inner: String = inner.chars().skip(1).take(len - 2).collect();
                 Ok(Expr::StringPrim(inner))
             }
-            TokenKind::FloatCast => {
+            TokenKind::FloatCast | TokenKind::IntCast => {
+                let cast = &token.kind.clone();
                 let expr = self.paren_expression()?;
-                Ok(Expr::CastToFloat(Box::new(expr)))
-            }
-            TokenKind::IntCast => {
-                let expr = self.paren_expression()?;
-                Ok(Expr::CastToInt(Box::new(expr)))
+                Ok(Self::unary_tree(cast, expr))
             }
             TokenKind::Max | TokenKind::Min | TokenKind::Mean | TokenKind::Sum => {
                 let stat = token.kind.clone();
                 let (left, right) = self.stat_inner()?;
-                match stat {
-                    TokenKind::Max => Ok(Expr::Max(Box::new(left), Box::new(right))),
-                    TokenKind::Min => Ok(Expr::Min(Box::new(left), Box::new(right))),
-                    TokenKind::Mean => Ok(Expr::Mean(Box::new(left), Box::new(right))),
-                    TokenKind::Sum => Ok(Expr::Sum(Box::new(left), Box::new(right))),
-                    _ => unreachable!()
-                }
+                Ok(Self::binary_tree(left, &stat, right))
             }
             TokenKind::Pound => {
                 self.demand(&TokenKind::LeftSquare)?;
