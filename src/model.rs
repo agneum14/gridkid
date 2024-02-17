@@ -3,8 +3,8 @@ use std::fmt::Display;
 use anyhow::{bail, ensure, Context, Result};
 
 struct Cell {
-    ast: Option<Token>,
-    eval: Option<Token>,
+    ast: Option<Expr>,
+    eval: Option<Expr>,
 }
 
 impl Default for Cell {
@@ -34,8 +34,8 @@ impl Grid {
     const WIDTH: usize = 100;
 
     /// Calculate an grid index from an AddrPrim
-    fn idx(addr: &Token) -> Result<usize> {
-        if let Token::AddrPrim(x, y) = addr {
+    fn idx(addr: &Expr) -> Result<usize> {
+        if let Expr::AddrPrim(x, y) = addr {
             ensure!(*x < Self::WIDTH && *y < Self::WIDTH);
             Ok(*x * Self::WIDTH + *y)
         } else {
@@ -44,13 +44,13 @@ impl Grid {
     }
 
     /// Get a cell reference from an AddrPrim
-    fn cell(&self, addr: &Token) -> Result<&Cell> {
+    fn cell(&self, addr: &Expr) -> Result<&Cell> {
         let idx = Self::idx(addr)?;
         Ok(self.cells.get(idx).unwrap())
     }
 
     /// Get a mutable cell reference from an AddrPrim
-    fn cell_mut(&mut self, addr: &Token) -> Result<&mut Cell> {
+    fn cell_mut(&mut self, addr: &Expr) -> Result<&mut Cell> {
         let idx = Self::idx(addr)?;
         Ok(self.cells.get_mut(idx).unwrap())
     }
@@ -70,17 +70,17 @@ impl Default for Runtime {
 
 impl Runtime {
     /// Get a cell reference from an AddrPrim
-    fn cell(&self, addr: &Token) -> Result<&Cell> {
+    fn cell(&self, addr: &Expr) -> Result<&Cell> {
         self.grid.cell(addr)
     }
 
     /// Get a mutable cell reference from an AddrPrim
-    fn cell_mut(&mut self, addr: &Token) -> Result<&mut Cell> {
+    fn cell_mut(&mut self, addr: &Expr) -> Result<&mut Cell> {
         self.grid.cell_mut(addr)
     }
 
     /// Set a cell from an AddrPrim and AST
-    pub fn set_cell(&mut self, addr: &Token, ast: &Token) -> Result<()> {
+    pub fn set_cell(&mut self, addr: &Expr, ast: &Expr) -> Result<()> {
         let eval = ast.eval(self)?;
         let cell = self.cell_mut(addr)?;
         cell.ast = Some(ast.clone());
@@ -89,9 +89,9 @@ impl Runtime {
     }
 
     /// Get references to cells in a bounding box of two AddrPrims
-    fn cell_range(&self, addr1: &Token, addr2: &Token) -> Result<Vec<&Cell>> {
+    fn cell_range(&self, addr1: &Expr, addr2: &Expr) -> Result<Vec<&Cell>> {
         let (x1, y1, x2, y2) = match (addr1, addr2) {
-            (Token::AddrPrim(x1, y1), Token::AddrPrim(x2, y2)) => (*x1, *y1, *x2, *y2),
+            (Expr::AddrPrim(x1, y1), Expr::AddrPrim(x2, y2)) => (*x1, *y1, *x2, *y2),
             _ => bail!("cannot get cell range from types {} and {}", addr1, addr2),
         };
         ensure!(x1 < Grid::WIDTH && y1 < Grid::WIDTH && x2 < Grid::WIDTH && y2 < Grid::WIDTH);
@@ -99,7 +99,7 @@ impl Runtime {
         let mut cells: Vec<&Cell> = Vec::new();
         for x in x1.min(x2)..=x1.max(x2) {
             for y in y1.min(y2)..=y1.max(y2) {
-                let cell = self.cell(&Token::AddrPrim(x, y))?;
+                let cell = self.cell(&Expr::AddrPrim(x, y))?;
                 cells.push(cell);
             }
         }
@@ -108,14 +108,14 @@ impl Runtime {
     }
 
     /// Get the evals of cells in a bounding box of two AddrPrims
-    fn eval_range(&self, addr1: &Token, addr2: &Token) -> Result<Vec<&Token>> {
+    fn eval_range(&self, addr1: &Expr, addr2: &Expr) -> Result<Vec<&Expr>> {
         let cells = self.cell_range(addr1, addr2)?;
 
         Ok(cells
             .iter()
             .flat_map(|c| match c.eval.as_ref() {
                 Some(v) => match v {
-                    Token::IntPrim(_) => Ok(v),
+                    Expr::IntPrim(_) => Ok(v),
                     _ => bail!("cannot perform statistics on type {}", v),
                 },
                 None => bail!("accessed empty cell"),
@@ -125,7 +125,7 @@ impl Runtime {
 }
 
 #[derive(PartialEq, Clone, Debug)]
-pub enum Token {
+pub enum Expr {
     // primitives
     IntPrim(i64),
     FloatPrim(f64),
@@ -134,50 +134,50 @@ pub enum Token {
     AddrPrim(usize, usize),
 
     // arithmetic
-    Add(Box<Token>, Box<Token>),
-    Sub(Box<Token>, Box<Token>),
-    Mult(Box<Token>, Box<Token>),
-    Div(Box<Token>, Box<Token>),
-    Mod(Box<Token>, Box<Token>),
-    Exp(Box<Token>, Box<Token>),
+    Add(Box<Expr>, Box<Expr>),
+    Sub(Box<Expr>, Box<Expr>),
+    Mult(Box<Expr>, Box<Expr>),
+    Div(Box<Expr>, Box<Expr>),
+    Mod(Box<Expr>, Box<Expr>),
+    Exp(Box<Expr>, Box<Expr>),
 
     // logical
-    LogicAnd(Box<Token>, Box<Token>),
-    LogicOr(Box<Token>, Box<Token>),
-    LogicNot(Box<Token>),
+    LogicAnd(Box<Expr>, Box<Expr>),
+    LogicOr(Box<Expr>, Box<Expr>),
+    LogicNot(Box<Expr>),
 
     // cell values
-    RValue(Box<Token>, Box<Token>),
-    LValue(Box<Token>, Box<Token>),
+    RValue(Box<Expr>, Box<Expr>),
+    LValue(Box<Expr>, Box<Expr>),
 
     // bitwise
-    BitwiseAnd(Box<Token>, Box<Token>),
-    BitwiseOr(Box<Token>, Box<Token>),
-    BitwiseXor(Box<Token>, Box<Token>),
-    BitwiseNot(Box<Token>),
-    BitwiseLeftShift(Box<Token>, Box<Token>),
-    BitwiseRightShift(Box<Token>, Box<Token>),
+    BitwiseAnd(Box<Expr>, Box<Expr>),
+    BitwiseOr(Box<Expr>, Box<Expr>),
+    BitwiseXor(Box<Expr>, Box<Expr>),
+    BitwiseNot(Box<Expr>),
+    BitwiseLeftShift(Box<Expr>, Box<Expr>),
+    BitwiseRightShift(Box<Expr>, Box<Expr>),
 
     // relational
-    Equals(Box<Token>, Box<Token>),
-    NotEquals(Box<Token>, Box<Token>),
-    LessThan(Box<Token>, Box<Token>),
-    LessThanOrEquals(Box<Token>, Box<Token>),
-    GreaterThan(Box<Token>, Box<Token>),
-    GreaterThanOrEquals(Box<Token>, Box<Token>),
+    Equals(Box<Expr>, Box<Expr>),
+    NotEquals(Box<Expr>, Box<Expr>),
+    LessThan(Box<Expr>, Box<Expr>),
+    LessThanOrEquals(Box<Expr>, Box<Expr>),
+    GreaterThan(Box<Expr>, Box<Expr>),
+    GreaterThanOrEquals(Box<Expr>, Box<Expr>),
 
     // casting
-    CastToInt(Box<Token>),
-    CastToFloat(Box<Token>),
+    CastToInt(Box<Expr>),
+    CastToFloat(Box<Expr>),
 
     // statistical
-    Max(Box<Token>, Box<Token>),
-    Min(Box<Token>, Box<Token>),
-    Mean(Box<Token>, Box<Token>),
-    Sum(Box<Token>, Box<Token>),
+    Max(Box<Expr>, Box<Expr>),
+    Min(Box<Expr>, Box<Expr>),
+    Mean(Box<Expr>, Box<Expr>),
+    Sum(Box<Expr>, Box<Expr>),
 }
 
-impl Display for Token {
+impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::IntPrim(v) => write!(f, "IntPrim({})", v),
@@ -218,38 +218,38 @@ impl Display for Token {
     }
 }
 
-impl Token {
+impl Expr {
     /// Get the inner value of an IntPrim
     fn inner_int_prim(&self) -> Result<i64> {
         match self {
-            Token::IntPrim(a) => Ok(*a),
+            Expr::IntPrim(a) => Ok(*a),
             _ => bail!("{} is not an IntPrim", self),
         }
     }
 
     /// Create an AddrPrim from two IntPrims with bounds checking
-    fn new_addr_prim(x: &Token, y: &Token) -> Result<Token> {
+    fn new_addr_prim(x: &Expr, y: &Expr) -> Result<Expr> {
         let (x, y) = match (x, y) {
-            (Token::IntPrim(x), Token::IntPrim(y)) => (*x, *y),
+            (Expr::IntPrim(x), Expr::IntPrim(y)) => (*x, *y),
             _ => bail!("cannot create AddrPrim from types {} and {}", x, y),
         };
         ensure!(x >= 0 && x < Grid::WIDTH as i64 && y >= 0 && y < Grid::WIDTH as i64);
-        Ok(Token::AddrPrim(x as usize, y as usize))
+        Ok(Expr::AddrPrim(x as usize, y as usize))
     }
 
-    /// Converts an IntPrim and a FloatPrim to FloatPrims. Other tokens are unchanged.
-    fn coerce(a: &Token, b: &Token) -> (Token, Token) {
-        if let (Token::IntPrim(av), Token::FloatPrim(_)) = (a, b) {
-            (Token::FloatPrim(*av as f64), b.clone())
-        } else if let (Token::FloatPrim(_), Token::IntPrim(bv)) = (a, b) {
-            (a.clone(), Token::FloatPrim(*bv as f64))
+    /// Converts an IntPrim and a FloatPrim to FloatPrims. Other exprs are unchanged.
+    fn coerce(a: &Expr, b: &Expr) -> (Expr, Expr) {
+        if let (Expr::IntPrim(av), Expr::FloatPrim(_)) = (a, b) {
+            (Expr::FloatPrim(*av as f64), b.clone())
+        } else if let (Expr::FloatPrim(_), Expr::IntPrim(bv)) = (a, b) {
+            (a.clone(), Expr::FloatPrim(*bv as f64))
         } else {
             (a.clone(), b.clone())
         }
     }
 
-    /// Evaluate a Token, recursing through the AST
-    pub fn eval(&self, runtime: &Runtime) -> Result<Token> {
+    /// Evaluate an Expr, recursing through the AST
+    pub fn eval(&self, runtime: &Runtime) -> Result<Expr> {
         match self {
             Self::IntPrim(_)
             | Self::FloatPrim(_)
@@ -260,8 +260,8 @@ impl Token {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::IntPrim(av + bv)),
-                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::FloatPrim(av + bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av + bv)),
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::FloatPrim(av + bv)),
                     _ => bail!("cannot add types {} and {}", a, b),
                 }
             }
@@ -269,8 +269,8 @@ impl Token {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::IntPrim(av - bv)),
-                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::FloatPrim(av - bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av - bv)),
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::FloatPrim(av - bv)),
                     _ => bail!("cannot sub types {} and {}", a, b),
                 }
             }
@@ -278,8 +278,8 @@ impl Token {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::IntPrim(av * bv)),
-                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::FloatPrim(av * bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av * bv)),
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::FloatPrim(av * bv)),
                     _ => bail!("cannot mult types {} and {}", a, b),
                 }
             }
@@ -287,32 +287,32 @@ impl Token {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::IntPrim(av / bv)),
-                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::FloatPrim(av / bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av / bv)),
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::FloatPrim(av / bv)),
                     _ => bail!("cannot div types {} and {}", a, b),
                 }
             }
             Self::Mod(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::IntPrim(av % bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av % bv)),
                     _ => bail!("cannot mod types {} and {}", a, b),
                 }
             }
             Self::Exp(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => {
-                        Ok(Token::IntPrim(av.pow(*bv as u32)))
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => {
+                        Ok(Expr::IntPrim(av.pow(*bv as u32)))
                     }
-                    (Token::IntPrim(av), Token::FloatPrim(bv)) => {
-                        Ok(Token::FloatPrim((*av as f64).powf(*bv)))
+                    (Expr::IntPrim(av), Expr::FloatPrim(bv)) => {
+                        Ok(Expr::FloatPrim((*av as f64).powf(*bv)))
                     }
-                    (Token::FloatPrim(av), Token::IntPrim(bv)) => {
-                        Ok(Token::FloatPrim(av.powi(*bv as i32)))
+                    (Expr::FloatPrim(av), Expr::IntPrim(bv)) => {
+                        Ok(Expr::FloatPrim(av.powi(*bv as i32)))
                     }
-                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => {
-                        Ok(Token::FloatPrim(av.powf(*bv)))
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => {
+                        Ok(Expr::FloatPrim(av.powf(*bv)))
                     }
                     _ => bail!("cannot exponentiate types {} and {}", a, b),
                 }
@@ -320,21 +320,21 @@ impl Token {
             Self::LogicAnd(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 match (a, b) {
-                    (Token::BoolPrim(av), Token::BoolPrim(bv)) => Ok(Token::BoolPrim(*av && *bv)),
+                    (Expr::BoolPrim(av), Expr::BoolPrim(bv)) => Ok(Expr::BoolPrim(*av && *bv)),
                     _ => bail!("cannot logic and types {} and {}", a, b),
                 }
             }
             Self::LogicOr(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 match (a, b) {
-                    (Token::BoolPrim(av), Token::BoolPrim(bv)) => Ok(Token::BoolPrim(*av || *bv)),
+                    (Expr::BoolPrim(av), Expr::BoolPrim(bv)) => Ok(Expr::BoolPrim(*av || *bv)),
                     _ => bail!("cannot logic or types {} and {}", a, b),
                 }
             }
             Self::LogicNot(a) => {
                 let a = &a.eval(runtime)?;
                 match a {
-                    Token::BoolPrim(av) => Ok(Token::BoolPrim(!av)),
+                    Expr::BoolPrim(av) => Ok(Expr::BoolPrim(!av)),
                     _ => bail!("cannot logic not type {}", a),
                 }
             }
@@ -355,58 +355,58 @@ impl Token {
             Self::BitwiseAnd(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Self::IntPrim(av & bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Self::IntPrim(av & bv)),
                     _ => bail!("cannot bitwise and types {} and {}", a, b),
                 }
             }
             Self::BitwiseOr(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Self::IntPrim(av | bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Self::IntPrim(av | bv)),
                     _ => bail!("cannot bitwise or types {} and {}", a, b),
                 }
             }
             Self::BitwiseXor(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Self::IntPrim(av ^ bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Self::IntPrim(av ^ bv)),
                     _ => bail!("cannot bitwise xor types {} and {}", a, b),
                 }
             }
             Self::BitwiseNot(a) => {
                 let a = &a.eval(runtime)?;
                 match a {
-                    Token::IntPrim(av) => Ok(Token::IntPrim(!av)),
+                    Expr::IntPrim(av) => Ok(Expr::IntPrim(!av)),
                     _ => bail!("cannot bitwise not type {}", a),
                 }
             }
             Self::BitwiseLeftShift(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Self::IntPrim(av << bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Self::IntPrim(av << bv)),
                     _ => bail!("cannot left shift types {} and {}", a, b),
                 }
             }
             Self::BitwiseRightShift(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Self::IntPrim(av >> bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Self::IntPrim(av >> bv)),
                     _ => bail!("cannot right shift types {} and {}", a, b),
                 }
             }
             Self::CastToInt(a) => {
                 let a = &a.eval(runtime)?;
                 match a {
-                    Token::IntPrim(_) => Ok(a.clone()),
-                    Token::FloatPrim(v) => Ok(Token::IntPrim(*v as i64)),
+                    Expr::IntPrim(_) => Ok(a.clone()),
+                    Expr::FloatPrim(v) => Ok(Expr::IntPrim(*v as i64)),
                     _ => bail!("cannot cast type {} to FloatPrim", a),
                 }
             }
             Self::CastToFloat(a) => {
                 let a = &a.eval(runtime)?;
                 match a {
-                    Token::IntPrim(v) => Ok(Token::FloatPrim(*v as f64)),
-                    Token::FloatPrim(_) => Ok(a.clone()),
+                    Expr::IntPrim(v) => Ok(Expr::FloatPrim(*v as f64)),
+                    Expr::FloatPrim(_) => Ok(a.clone()),
                     _ => bail!("cannot cast type {} to FloatPrim", a),
                 }
             }
@@ -414,9 +414,9 @@ impl Token {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av == bv)),
-                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av == bv)),
-                    (Token::BoolPrim(av), Token::BoolPrim(bv)) => Ok(Token::BoolPrim(av == bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av == bv)),
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::BoolPrim(av == bv)),
+                    (Expr::BoolPrim(av), Expr::BoolPrim(bv)) => Ok(Expr::BoolPrim(av == bv)),
                     _ => bail!("cannot check equality for types {} and {}", a, b),
                 }
             }
@@ -424,9 +424,9 @@ impl Token {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av != bv)),
-                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av != bv)),
-                    (Token::BoolPrim(av), Token::BoolPrim(bv)) => Ok(Token::BoolPrim(av != bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av != bv)),
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::BoolPrim(av != bv)),
+                    (Expr::BoolPrim(av), Expr::BoolPrim(bv)) => Ok(Expr::BoolPrim(av != bv)),
                     _ => bail!("cannot check equality for types {} and {}", a, b),
                 }
             }
@@ -434,8 +434,8 @@ impl Token {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av < bv)),
-                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av < bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av < bv)),
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::BoolPrim(av < bv)),
                     _ => bail!("cannot check equality for types {} and {}", a, b),
                 }
             }
@@ -443,8 +443,8 @@ impl Token {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av <= bv)),
-                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av <= bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av <= bv)),
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::BoolPrim(av <= bv)),
                     _ => bail!("cannot check equality for types {} and {}", a, b),
                 }
             }
@@ -452,8 +452,8 @@ impl Token {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av > bv)),
-                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av > bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av > bv)),
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::BoolPrim(av > bv)),
                     _ => bail!("cannot check equality for types {} and {}", a, b),
                 }
             }
@@ -461,8 +461,8 @@ impl Token {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
-                    (Token::IntPrim(av), Token::IntPrim(bv)) => Ok(Token::BoolPrim(av >= bv)),
-                    (Token::FloatPrim(av), Token::FloatPrim(bv)) => Ok(Token::BoolPrim(av >= bv)),
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av >= bv)),
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::BoolPrim(av >= bv)),
                     _ => bail!("cannot check equality for types {} and {}", a, b),
                 }
             }
@@ -474,7 +474,7 @@ impl Token {
                     .map(|x| x.inner_int_prim().unwrap())
                     .max()
                     .unwrap();
-                Ok(Token::IntPrim(max))
+                Ok(Expr::IntPrim(max))
             }
             Self::Min(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
@@ -484,7 +484,7 @@ impl Token {
                     .map(|x| x.inner_int_prim().unwrap())
                     .min()
                     .unwrap();
-                Ok(Token::IntPrim(min))
+                Ok(Expr::IntPrim(min))
             }
             Self::Mean(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
@@ -503,12 +503,12 @@ impl Token {
                     .iter()
                     .map(|x| x.inner_int_prim().unwrap())
                     .sum::<i64>();
-                Ok(Token::IntPrim(sum))
+                Ok(Expr::IntPrim(sum))
             }
         }
     }
 
-    /// Serialize a Token, recursing through the AST
+    /// Serialize an Expr, recursing through the AST
     fn serialize(&self) -> String {
         match self {
             Self::IntPrim(a) => format!("{}", a),
@@ -568,7 +568,7 @@ mod tests {
                 let n: i64 = rand::thread_rng().gen_range(0..1000);
                 nums.push(n);
                 runtime
-                    .set_cell(&Token::AddrPrim(x, y), &Token::IntPrim(n))
+                    .set_cell(&Expr::AddrPrim(x, y), &Expr::IntPrim(n))
                     .unwrap();
             }
         }
@@ -579,11 +579,11 @@ mod tests {
     /// (7 * 4 + 3) % 12 = 7
     #[test]
     fn arithmetic() {
-        let x = Token::Mult(Box::new(Token::IntPrim(7)), Box::new(Token::IntPrim(4)));
-        let x = Token::Add(Box::new(x), Box::new(Token::IntPrim(3)));
-        let x = Token::Mod(Box::new(x), Box::new(Token::IntPrim(12)));
+        let x = Expr::Mult(Box::new(Expr::IntPrim(7)), Box::new(Expr::IntPrim(4)));
+        let x = Expr::Add(Box::new(x), Box::new(Expr::IntPrim(3)));
+        let x = Expr::Mod(Box::new(x), Box::new(Expr::IntPrim(12)));
         let x = x.eval(&Runtime::default()).unwrap();
-        assert_eq!(Token::IntPrim(7), x);
+        assert_eq!(Expr::IntPrim(7), x);
     }
 
     // #[1 + 1, 4] << 3
@@ -592,14 +592,14 @@ mod tests {
         // store 5 in (2, 4)
         let mut runtime = Runtime::default();
         runtime
-            .set_cell(&Token::AddrPrim(2, 4), &Token::IntPrim(5))
+            .set_cell(&Expr::AddrPrim(2, 4), &Expr::IntPrim(5))
             .unwrap();
 
-        let x = Token::Add(Box::new(Token::IntPrim(1)), Box::new(Token::IntPrim(1)));
-        let x = Token::RValue(Box::new(x), Box::new(Token::IntPrim(4)));
-        let x = Token::BitwiseLeftShift(Box::new(x), Box::new(Token::IntPrim(3)));
+        let x = Expr::Add(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(1)));
+        let x = Expr::RValue(Box::new(x), Box::new(Expr::IntPrim(4)));
+        let x = Expr::BitwiseLeftShift(Box::new(x), Box::new(Expr::IntPrim(3)));
         let x = x.eval(&runtime).unwrap();
-        assert_eq!(Token::IntPrim(40), x)
+        assert_eq!(Expr::IntPrim(40), x)
     }
 
     /// #[0, 0] < #[0, 1]
@@ -608,17 +608,17 @@ mod tests {
         // store 1 in (0, 0) and 7 in (0, 1)
         let mut runtime = Runtime::default();
         runtime
-            .set_cell(&Token::AddrPrim(0, 0), &Token::IntPrim(1))
+            .set_cell(&Expr::AddrPrim(0, 0), &Expr::IntPrim(1))
             .unwrap();
         runtime
-            .set_cell(&Token::AddrPrim(0, 1), &Token::IntPrim(7))
+            .set_cell(&Expr::AddrPrim(0, 1), &Expr::IntPrim(7))
             .unwrap();
 
-        let x = Token::RValue(Box::new(Token::IntPrim(0)), Box::new(Token::IntPrim(0)));
-        let y = Token::RValue(Box::new(Token::IntPrim(0)), Box::new(Token::IntPrim(1)));
-        let res = Token::LessThan(Box::new(x), Box::new(y));
+        let x = Expr::RValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(0)));
+        let y = Expr::RValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(1)));
+        let res = Expr::LessThan(Box::new(x), Box::new(y));
         let res = res.eval(&runtime).unwrap();
-        assert_eq!(Token::BoolPrim(true), res)
+        assert_eq!(Expr::BoolPrim(true), res)
     }
 
     /// sum([1, 2], [5, 3])
@@ -626,12 +626,12 @@ mod tests {
     fn sum() {
         let (runtime, nums) = build_runtime_grid(1, 2, 5, 3);
 
-        let x = Token::LValue(Box::new(Token::IntPrim(1)), Box::new(Token::IntPrim(2)));
-        let y = Token::LValue(Box::new(Token::IntPrim(5)), Box::new(Token::IntPrim(3)));
-        let res = Token::Sum(Box::new(x), Box::new(y)).eval(&runtime).unwrap();
+        let x = Expr::LValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(2)));
+        let y = Expr::LValue(Box::new(Expr::IntPrim(5)), Box::new(Expr::IntPrim(3)));
+        let res = Expr::Sum(Box::new(x), Box::new(y)).eval(&runtime).unwrap();
 
         let sum = nums.iter().sum::<i64>();
-        assert_eq!(Token::IntPrim(sum), res)
+        assert_eq!(Expr::IntPrim(sum), res)
     }
 
     /// sum([1, 2], [5, 3])
@@ -640,36 +640,36 @@ mod tests {
         let (runtime, nums) = build_runtime_grid(1, 2, 5, 3);
         let res = parse("sum([1, 2], [5, 3])").unwrap().eval(&runtime).unwrap();
         let sum = nums.iter().sum::<i64>();
-        assert_eq!(Token::IntPrim(sum), res)
+        assert_eq!(Expr::IntPrim(sum), res)
     }
 
     /// !(3.3 > 3.2)
     #[test]
     fn logic_cmp() {
-        let x = Token::GreaterThan(
-            Box::new(Token::FloatPrim(3.3)),
-            Box::new(Token::FloatPrim(3.2)),
+        let x = Expr::GreaterThan(
+            Box::new(Expr::FloatPrim(3.3)),
+            Box::new(Expr::FloatPrim(3.2)),
         );
-        let x = Token::LogicNot(Box::new(x));
+        let x = Expr::LogicNot(Box::new(x));
         let x = x.eval(&Runtime::default()).unwrap();
-        assert_eq!(Token::BoolPrim(false), x);
+        assert_eq!(Expr::BoolPrim(false), x);
     }
 
     /// float(7) / 2 = 3.5
     #[test]
     fn casting() {
-        let x = Token::CastToFloat(Box::new(Token::IntPrim(7)));
-        let x = Token::Div(Box::new(x), Box::new(Token::IntPrim(2)));
+        let x = Expr::CastToFloat(Box::new(Expr::IntPrim(7)));
+        let x = Expr::Div(Box::new(x), Box::new(Expr::IntPrim(2)));
         let x = x.eval(&Runtime::default()).unwrap();
-        assert_eq!(Token::FloatPrim(3.5), x);
+        assert_eq!(Expr::FloatPrim(3.5), x);
     }
 
     /// (7 * 4 + 3) % 12 = 7
     #[test]
     fn arithmetic_serialize() {
-        let x = Token::Mult(Box::new(Token::IntPrim(7)), Box::new(Token::IntPrim(4)));
-        let x = Token::Add(Box::new(x), Box::new(Token::IntPrim(3)));
-        let x = Token::Mod(Box::new(x), Box::new(Token::IntPrim(12)));
+        let x = Expr::Mult(Box::new(Expr::IntPrim(7)), Box::new(Expr::IntPrim(4)));
+        let x = Expr::Add(Box::new(x), Box::new(Expr::IntPrim(3)));
+        let x = Expr::Mod(Box::new(x), Box::new(Expr::IntPrim(12)));
         assert_eq!("(((7 * 4) + 3) % 12)", x.serialize());
     }
 
@@ -679,12 +679,12 @@ mod tests {
         // store 5 in (2, 4)
         let mut runtime = Runtime::default();
         runtime
-            .set_cell(&Token::AddrPrim(2, 4), &Token::IntPrim(5))
+            .set_cell(&Expr::AddrPrim(2, 4), &Expr::IntPrim(5))
             .unwrap();
 
-        let x = Token::Add(Box::new(Token::IntPrim(1)), Box::new(Token::IntPrim(1)));
-        let x = Token::RValue(Box::new(x), Box::new(Token::IntPrim(4)));
-        let x = Token::BitwiseLeftShift(Box::new(x), Box::new(Token::IntPrim(3)));
+        let x = Expr::Add(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(1)));
+        let x = Expr::RValue(Box::new(x), Box::new(Expr::IntPrim(4)));
+        let x = Expr::BitwiseLeftShift(Box::new(x), Box::new(Expr::IntPrim(3)));
         assert_eq!("(#[(1 + 1), 4] << 3)", x.serialize());
     }
 
@@ -694,43 +694,43 @@ mod tests {
         // store 1 in (0, 0) and 7 in (0, 1)
         let mut runtime = Runtime::default();
         runtime
-            .set_cell(&Token::AddrPrim(0, 0), &Token::IntPrim(1))
+            .set_cell(&Expr::AddrPrim(0, 0), &Expr::IntPrim(1))
             .unwrap();
         runtime
-            .set_cell(&Token::AddrPrim(0, 1), &Token::IntPrim(7))
+            .set_cell(&Expr::AddrPrim(0, 1), &Expr::IntPrim(7))
             .unwrap();
 
-        let x = Token::RValue(Box::new(Token::IntPrim(0)), Box::new(Token::IntPrim(0)));
-        let y = Token::RValue(Box::new(Token::IntPrim(0)), Box::new(Token::IntPrim(1)));
-        let res = Token::LessThan(Box::new(x), Box::new(y));
+        let x = Expr::RValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(0)));
+        let y = Expr::RValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(1)));
+        let res = Expr::LessThan(Box::new(x), Box::new(y));
         assert_eq!("(#[0, 0] < #[0, 1])", res.serialize())
     }
 
     /// sum([1, 2], [5, 3])
     #[test]
     fn sum_serialize() {
-        let x = Token::LValue(Box::new(Token::IntPrim(1)), Box::new(Token::IntPrim(2)));
-        let y = Token::LValue(Box::new(Token::IntPrim(5)), Box::new(Token::IntPrim(3)));
-        let res = Token::Sum(Box::new(x), Box::new(y));
+        let x = Expr::LValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(2)));
+        let y = Expr::LValue(Box::new(Expr::IntPrim(5)), Box::new(Expr::IntPrim(3)));
+        let res = Expr::Sum(Box::new(x), Box::new(y));
         assert_eq!("sum([1, 2], [5, 3])", res.serialize())
     }
 
     /// !(3.3 > 3.2)
     #[test]
     fn logic_cmp_serialize() {
-        let x = Token::GreaterThan(
-            Box::new(Token::FloatPrim(3.3)),
-            Box::new(Token::FloatPrim(3.2)),
+        let x = Expr::GreaterThan(
+            Box::new(Expr::FloatPrim(3.3)),
+            Box::new(Expr::FloatPrim(3.2)),
         );
-        let x = Token::LogicNot(Box::new(x));
+        let x = Expr::LogicNot(Box::new(x));
         assert_eq!("!(3.3 > 3.2)", x.serialize());
     }
 
     /// float(7) / 2 = 3.5
     #[test]
     fn casting_serialize() {
-        let x = Token::CastToFloat(Box::new(Token::IntPrim(7)));
-        let x = Token::Div(Box::new(x), Box::new(Token::IntPrim(2)));
+        let x = Expr::CastToFloat(Box::new(Expr::IntPrim(7)));
+        let x = Expr::Div(Box::new(x), Box::new(Expr::IntPrim(2)));
         assert_eq!("(float(7) / 2)", x.serialize());
     }
 
@@ -738,85 +738,85 @@ mod tests {
     fn sum_manual() {
         let mut runtime = Runtime::default();
         runtime
-            .set_cell(&Token::AddrPrim(1, 2), &Token::IntPrim(1))
+            .set_cell(&Expr::AddrPrim(1, 2), &Expr::IntPrim(1))
             .unwrap();
         runtime
-            .set_cell(&Token::AddrPrim(1, 3), &Token::IntPrim(2))
+            .set_cell(&Expr::AddrPrim(1, 3), &Expr::IntPrim(2))
             .unwrap();
         runtime
-            .set_cell(&Token::AddrPrim(1, 4), &Token::IntPrim(3))
+            .set_cell(&Expr::AddrPrim(1, 4), &Expr::IntPrim(3))
             .unwrap();
         runtime
-            .set_cell(&Token::AddrPrim(2, 2), &Token::IntPrim(4))
+            .set_cell(&Expr::AddrPrim(2, 2), &Expr::IntPrim(4))
             .unwrap();
         runtime
-            .set_cell(&Token::AddrPrim(2, 3), &Token::IntPrim(5))
+            .set_cell(&Expr::AddrPrim(2, 3), &Expr::IntPrim(5))
             .unwrap();
         runtime
-            .set_cell(&Token::AddrPrim(2, 4), &Token::IntPrim(6))
+            .set_cell(&Expr::AddrPrim(2, 4), &Expr::IntPrim(6))
             .unwrap();
 
-        let a = Token::LValue(Box::new(Token::IntPrim(1)), Box::new(Token::IntPrim(2)));
-        let b = Token::LValue(Box::new(Token::IntPrim(2)), Box::new(Token::IntPrim(4)));
-        let res = Token::Sum(Box::new(a), Box::new(b)).eval(&runtime).unwrap();
-        assert_eq!(Token::IntPrim(21), res)
+        let a = Expr::LValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(2)));
+        let b = Expr::LValue(Box::new(Expr::IntPrim(2)), Box::new(Expr::IntPrim(4)));
+        let res = Expr::Sum(Box::new(a), Box::new(b)).eval(&runtime).unwrap();
+        assert_eq!(Expr::IntPrim(21), res)
     }
 
     #[test]
     fn max() {
         let (runtime, nums) = build_runtime_grid(50, 90, 1, 35);
 
-        let x = Token::LValue(Box::new(Token::IntPrim(50)), Box::new(Token::IntPrim(90)));
-        let y = Token::LValue(Box::new(Token::IntPrim(1)), Box::new(Token::IntPrim(35)));
-        let res = Token::Max(Box::new(y), Box::new(x)).eval(&runtime).unwrap();
+        let x = Expr::LValue(Box::new(Expr::IntPrim(50)), Box::new(Expr::IntPrim(90)));
+        let y = Expr::LValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(35)));
+        let res = Expr::Max(Box::new(y), Box::new(x)).eval(&runtime).unwrap();
 
         let max = nums.iter().max().unwrap();
-        assert_eq!(Token::IntPrim(*max), res)
+        assert_eq!(Expr::IntPrim(*max), res)
     }
 
     #[test]
     fn min() {
         let (runtime, nums) = build_runtime_grid(0, 99, 0, 99);
 
-        let x = Token::LValue(Box::new(Token::IntPrim(0)), Box::new(Token::IntPrim(99)));
-        let y = Token::LValue(Box::new(Token::IntPrim(0)), Box::new(Token::IntPrim(99)));
-        let res = Token::Min(Box::new(y), Box::new(x)).eval(&runtime).unwrap();
+        let x = Expr::LValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(99)));
+        let y = Expr::LValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(99)));
+        let res = Expr::Min(Box::new(y), Box::new(x)).eval(&runtime).unwrap();
 
         let min = nums.iter().min().unwrap();
-        assert_eq!(Token::IntPrim(*min), res)
+        assert_eq!(Expr::IntPrim(*min), res)
     }
 
     #[test]
     fn mean() {
         let (runtime, nums) = build_runtime_grid(7, 24, 2, 15);
 
-        let x = Token::LValue(Box::new(Token::IntPrim(7)), Box::new(Token::IntPrim(24)));
-        let y = Token::LValue(Box::new(Token::IntPrim(2)), Box::new(Token::IntPrim(15)));
-        let res = Token::Mean(Box::new(y), Box::new(x))
+        let x = Expr::LValue(Box::new(Expr::IntPrim(7)), Box::new(Expr::IntPrim(24)));
+        let y = Expr::LValue(Box::new(Expr::IntPrim(2)), Box::new(Expr::IntPrim(15)));
+        let res = Expr::Mean(Box::new(y), Box::new(x))
             .eval(&runtime)
             .unwrap();
 
         let mean = nums.iter().sum::<i64>() as f64 / nums.len() as f64;
-        assert_eq!(Token::FloatPrim(mean), res)
+        assert_eq!(Expr::FloatPrim(mean), res)
     }
 
     #[test]
     fn access_invalid_range() {
-        let x = Token::LValue(Box::new(Token::IntPrim(0)), Box::new(Token::IntPrim(100)));
+        let x = Expr::LValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(100)));
         let x = x.eval(&Runtime::default());
         assert!(x.is_err());
     }
 
     #[test]
     fn access_empty_cell() {
-        let x = Token::RValue(Box::new(Token::IntPrim(1)), Box::new(Token::IntPrim(1)));
+        let x = Expr::RValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(1)));
         let x = x.eval(&Runtime::default());
         assert!(x.is_err());
     }
 
     #[test]
     fn invalid_prims() {
-        let x = Token::Add(Box::new(Token::IntPrim(5)), Box::new(Token::BoolPrim(true)));
+        let x = Expr::Add(Box::new(Expr::IntPrim(5)), Box::new(Expr::BoolPrim(true)));
         let x = x.eval(&Runtime::default());
         assert!(x.is_err())
     }

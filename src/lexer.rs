@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum LexemeKind {
+pub enum TokenKind {
     LogicOr,
     LogicAnd,
     BitOr,
@@ -42,15 +42,15 @@ pub enum LexemeKind {
 }
 
 #[derive(Debug)]
-pub struct Lexeme {
+pub struct Token {
     pub src: String,
-    pub kind: LexemeKind,
+    pub kind: TokenKind,
     pub start: usize,
 }
 
 struct Lexer {
-    lexemes: Vec<Lexeme>,
-    lexeme_so_far: String,
+    tokens: Vec<Token>,
+    token_so_far: String,
     i: usize,
     start: usize,
     src: Box<[char]>,
@@ -59,8 +59,8 @@ struct Lexer {
 impl Lexer {
     fn new(src: &str) -> Self {
         Self {
-            lexemes: Vec::new(),
-            lexeme_so_far: "".to_string(),
+            tokens: Vec::new(),
+            token_so_far: "".to_string(),
             i: 0,
             start: 0,
             src: src.chars().collect(),
@@ -71,14 +71,14 @@ impl Lexer {
         self.src.get(self.i)
     }
 
-    fn emit_lexeme(&mut self, kind: LexemeKind) {
-        let lexeme = Lexeme {
-            src: self.lexeme_so_far.to_owned(),
+    fn emit_token(&mut self, kind: TokenKind) {
+        let token = Token {
+            src: self.token_so_far.to_owned(),
             kind,
             start: self.start,
         };
-        self.lexemes.push(lexeme);
-        self.lexeme_so_far.clear();
+        self.tokens.push(token);
+        self.token_so_far.clear();
     }
 
     fn has(&self, targ: char) -> bool {
@@ -101,7 +101,7 @@ impl Lexer {
         let c = self
             .get()
             .expect(&format!("invalid cap at index {}", self.i));
-        self.lexeme_so_far.push(*c);
+        self.token_so_far.push(*c);
         self.i += 1;
     }
 
@@ -151,9 +151,9 @@ impl Lexer {
         ));
     }
 
-    fn cap_emit(&mut self, kind: LexemeKind) {
+    fn cap_emit(&mut self, kind: TokenKind) {
         self.cap();
-        self.emit_lexeme(kind);
+        self.emit_token(kind);
     }
 
     fn is_alphabetic(&self) -> bool {
@@ -167,64 +167,64 @@ impl Lexer {
         while self.i < self.src.len() {
             self.start = self.i;
             match self.src.get(self.i).unwrap() {
-                '+' => self.cap_emit(LexemeKind::Add),
-                '-' => self.cap_emit(LexemeKind::Sub),
-                '/' => self.cap_emit(LexemeKind::Div),
-                '%' => self.cap_emit(LexemeKind::Mod),
-                '(' => self.cap_emit(LexemeKind::LeftParen),
-                ')' => self.cap_emit(LexemeKind::RightParen),
-                '~' => self.cap_emit(LexemeKind::BitNot),
-                '[' => self.cap_emit(LexemeKind::LeftSquare),
-                ']' => self.cap_emit(LexemeKind::RightSquare),
-                '#' => self.cap_emit(LexemeKind::Pound),
-                ',' => self.cap_emit(LexemeKind::Comma),
+                '+' => self.cap_emit(TokenKind::Add),
+                '-' => self.cap_emit(TokenKind::Sub),
+                '/' => self.cap_emit(TokenKind::Div),
+                '%' => self.cap_emit(TokenKind::Mod),
+                '(' => self.cap_emit(TokenKind::LeftParen),
+                ')' => self.cap_emit(TokenKind::RightParen),
+                '~' => self.cap_emit(TokenKind::BitNot),
+                '[' => self.cap_emit(TokenKind::LeftSquare),
+                ']' => self.cap_emit(TokenKind::RightSquare),
+                '#' => self.cap_emit(TokenKind::Pound),
+                ',' => self.cap_emit(TokenKind::Comma),
                 '|' => {
                     self.cap();
                     match self.get() {
-                        Some('|') => self.cap_emit(LexemeKind::LogicOr),
-                        _ => self.emit_lexeme(LexemeKind::BitOr),
+                        Some('|') => self.cap_emit(TokenKind::LogicOr),
+                        _ => self.emit_token(TokenKind::BitOr),
                     }
                 }
                 '&' => {
                     self.cap();
                     match self.get() {
-                        Some('&') => self.cap_emit(LexemeKind::LogicAnd),
-                        _ => self.emit_lexeme(LexemeKind::BitAnd),
+                        Some('&') => self.cap_emit(TokenKind::LogicAnd),
+                        _ => self.emit_token(TokenKind::BitAnd),
                     }
                 }
                 '=' => {
                     self.cap();
                     self.cap_targ('=')?;
-                    self.emit_lexeme(LexemeKind::EqualTo);
+                    self.emit_token(TokenKind::EqualTo);
                 }
                 '!' => {
                     self.cap();
                     match self.get() {
-                        Some('=') => self.cap_emit(LexemeKind::NotEqualTo),
-                        _ => self.emit_lexeme(LexemeKind::LogicNot),
+                        Some('=') => self.cap_emit(TokenKind::NotEqualTo),
+                        _ => self.emit_token(TokenKind::LogicNot),
                     }
                 }
                 '<' => {
                     self.cap();
                     match self.get() {
-                        Some('=') => self.cap_emit(LexemeKind::LessThanOrEqualTo),
-                        Some('<') => self.cap_emit(LexemeKind::BitshiftLeft),
-                        _ => self.emit_lexeme(LexemeKind::LessThan),
+                        Some('=') => self.cap_emit(TokenKind::LessThanOrEqualTo),
+                        Some('<') => self.cap_emit(TokenKind::BitshiftLeft),
+                        _ => self.emit_token(TokenKind::LessThan),
                     }
                 }
                 '>' => {
                     self.cap();
                     match self.get() {
-                        Some('=') => self.cap_emit(LexemeKind::GreaterThanOrEqualTo),
-                        Some('>') => self.cap_emit(LexemeKind::BitshiftRight),
-                        _ => self.emit_lexeme(LexemeKind::GreaterThan),
+                        Some('=') => self.cap_emit(TokenKind::GreaterThanOrEqualTo),
+                        Some('>') => self.cap_emit(TokenKind::BitshiftRight),
+                        _ => self.emit_token(TokenKind::GreaterThan),
                     }
                 }
                 '*' => {
                     self.cap();
                     match self.get() {
-                        Some('*') => self.cap_emit(LexemeKind::Exp),
-                        _ => self.emit_lexeme(LexemeKind::Mult),
+                        Some('*') => self.cap_emit(TokenKind::Exp),
+                        _ => self.emit_token(TokenKind::Mult),
                     }
                 }
                 _ if self.has_digit() => {
@@ -239,9 +239,9 @@ impl Lexer {
                         while self.has_digit() {
                             self.cap();
                         }
-                        self.emit_lexeme(LexemeKind::Float);
+                        self.emit_token(TokenKind::Float);
                     } else {
-                        self.emit_lexeme(LexemeKind::Int);
+                        self.emit_token(TokenKind::Int);
                     }
                 }
                 _ if self.is_alphabetic() => {
@@ -250,18 +250,18 @@ impl Lexer {
                         self.cap();
                     }
 
-                    match self.lexeme_so_far.as_str() {
-                        "float" => self.emit_lexeme(LexemeKind::FloatCast),
-                        "int" => self.emit_lexeme(LexemeKind::IntCast),
-                        "false" | "true" => self.emit_lexeme(LexemeKind::Bool),
-                        "max" => self.emit_lexeme(LexemeKind::Max),
-                        "min" => self.emit_lexeme(LexemeKind::Min),
-                        "mean" => self.emit_lexeme(LexemeKind::Mean),
-                        "sum" => self.emit_lexeme(LexemeKind::Sum),
+                    match self.token_so_far.as_str() {
+                        "float" => self.emit_token(TokenKind::FloatCast),
+                        "int" => self.emit_token(TokenKind::IntCast),
+                        "false" | "true" => self.emit_token(TokenKind::Bool),
+                        "max" => self.emit_token(TokenKind::Max),
+                        "min" => self.emit_token(TokenKind::Min),
+                        "mean" => self.emit_token(TokenKind::Mean),
+                        "sum" => self.emit_token(TokenKind::Sum),
                         _ => bail!(diag(
                             &self.src,
                             "identifier",
-                            &self.lexeme_so_far,
+                            &self.token_so_far,
                             self.start,
                             None
                         )),
@@ -277,12 +277,12 @@ impl Lexer {
                         }
                     }
                     self.cap_targ('"')?;
-                    self.emit_lexeme(LexemeKind::Str);
+                    self.emit_token(TokenKind::Str);
                 }
                 &c if c.is_whitespace() => self.i += 1,
                 &c => bail!(diag(
                     &self.src,
-                    "lexeme",
+                    "token",
                     c.to_string().as_str(),
                     self.i,
                     None
@@ -307,10 +307,10 @@ pub fn diag(src: &Box<[char]>, label: &str, found: &str, pos: usize, extra: Opti
     msg
 }
 
-pub fn lex(src: &str) -> Result<Vec<Lexeme>> {
+pub fn lex(src: &str) -> Result<Vec<Token>> {
     let mut lexer = Lexer::new(src);
     lexer.lex()?;
-    Ok(lexer.lexemes)
+    Ok(lexer.tokens)
 }
 
 #[cfg(test)]
@@ -318,7 +318,7 @@ mod tests {
     use super::*;
     use indoc::indoc;
 
-    fn cmp_toks(expected: &[LexemeKind], actual: &Vec<Lexeme>) -> bool {
+    fn cmp_toks(expected: &[TokenKind], actual: &Vec<Token>) -> bool {
         if expected.len() == actual.len() {
             for i in 0..expected.len() {
                 let e = expected.get(i).unwrap();
@@ -333,145 +333,145 @@ mod tests {
 
     #[test]
     fn invalid_char() {
-        let lexeme = lex("`");
-        assert!(lexeme.is_err())
+        let token = lex("`");
+        assert!(token.is_err())
     }
 
     #[test]
     fn invalid_float() {
-        let lexemes = lex("1.");
-        assert!(lexemes.is_err())
+        let tokens = lex("1.");
+        assert!(tokens.is_err())
     }
 
     #[test]
     fn float() {
-        let lexemes = lex("1.5").unwrap();
-        assert_eq!(LexemeKind::Float, lexemes.get(0).unwrap().kind)
+        let tokens = lex("1.5").unwrap();
+        assert_eq!(TokenKind::Float, tokens.get(0).unwrap().kind)
     }
 
     #[test]
     fn int_addition() {
-        let lexemes = lex("1 + 2").unwrap();
-        let expected = [LexemeKind::Int, LexemeKind::Add, LexemeKind::Int].as_slice();
-        assert!(cmp_toks(expected, &lexemes))
+        let tokens = lex("1 + 2").unwrap();
+        let expected = [TokenKind::Int, TokenKind::Add, TokenKind::Int].as_slice();
+        assert!(cmp_toks(expected, &tokens))
     }
 
     #[test]
     fn string() {
-        let lexemes = lex("1 + 2 + \"hello world!!!\" + 3 + 4").unwrap();
+        let tokens = lex("1 + 2 + \"hello world!!!\" + 3 + 4").unwrap();
         let expected = [
-            LexemeKind::Int,
-            LexemeKind::Add,
-            LexemeKind::Str,
-            LexemeKind::Add,
-            LexemeKind::Int,
-            LexemeKind::Add,
-            LexemeKind::Int,
+            TokenKind::Int,
+            TokenKind::Add,
+            TokenKind::Str,
+            TokenKind::Add,
+            TokenKind::Int,
+            TokenKind::Add,
+            TokenKind::Int,
         ]
         .as_slice();
-        assert!(cmp_toks(expected, &lexemes));
+        assert!(cmp_toks(expected, &tokens));
     }
 
     #[test]
     fn rvalue() {
-        let lexemes = lex("#[1 - 2.5, 0] * 5").unwrap();
+        let tokens = lex("#[1 - 2.5, 0] * 5").unwrap();
         let expected = [
-            LexemeKind::Pound,
-            LexemeKind::LeftSquare,
-            LexemeKind::Int,
-            LexemeKind::Sub,
-            LexemeKind::Float,
-            LexemeKind::Comma,
-            LexemeKind::Int,
-            LexemeKind::RightSquare,
-            LexemeKind::Mult,
-            LexemeKind::Int,
+            TokenKind::Pound,
+            TokenKind::LeftSquare,
+            TokenKind::Int,
+            TokenKind::Sub,
+            TokenKind::Float,
+            TokenKind::Comma,
+            TokenKind::Int,
+            TokenKind::RightSquare,
+            TokenKind::Mult,
+            TokenKind::Int,
         ]
         .as_slice();
-        assert!(cmp_toks(expected, &lexemes));
+        assert!(cmp_toks(expected, &tokens));
     }
 
     #[test]
     fn lvalue() {
-        let lexemes = lex("[0, 0]").unwrap();
+        let tokens = lex("[0, 0]").unwrap();
         let expected = [
-            LexemeKind::LeftSquare,
-            LexemeKind::Int,
-            LexemeKind::Comma,
-            LexemeKind::Int,
-            LexemeKind::RightSquare,
+            TokenKind::LeftSquare,
+            TokenKind::Int,
+            TokenKind::Comma,
+            TokenKind::Int,
+            TokenKind::RightSquare,
         ]
         .as_slice();
-        assert!(cmp_toks(expected, &lexemes));
+        assert!(cmp_toks(expected, &tokens));
     }
 
     #[test]
-    fn invalid_lexeme() {
-        let lexemes = lex("1 + 2 ` 3");
+    fn invalid_token() {
+        let tokens = lex("1 + 2 ` 3");
         let expected = indoc! {"
             1 + 2 ` 3
                   ^ <--- WRONG
-            invalid lexeme '`' at position 6"};
+            invalid token '`' at position 6"};
 
-        match lexemes {
+        match tokens {
             Err(e) => assert_eq!(expected, e.to_string()),
-            Ok(_) => assert!(lexemes.is_err()),
+            Ok(_) => assert!(tokens.is_err()),
         }
     }
 
     #[test]
     fn invalid_identifier() {
-        let lexemes = lex("1 + 2 + WillyWonka + 3");
+        let tokens = lex("1 + 2 + WillyWonka + 3");
         let expected = indoc! {"
             1 + 2 + WillyWonka + 3
                     ^ <--- WRONG
             invalid identifier 'WillyWonka' at position 8"};
 
-        match lexemes {
+        match tokens {
             Err(e) => assert_eq!(expected, e.to_string()),
-            Ok(_) => assert!(lexemes.is_err()),
+            Ok(_) => assert!(tokens.is_err()),
         }
     }
 
     #[test]
     fn invalid_digit() {
-        let lexemes = lex("1 + 1.a");
+        let tokens = lex("1 + 1.a");
         let expected = indoc! {"
             1 + 1.a
                   ^ <--- WRONG
             invalid char 'a' at position 6, expected digit"};
 
-        match lexemes {
+        match tokens {
             Err(e) => assert_eq!(expected, e.to_string()),
-            Ok(_) => assert!(lexemes.is_err()),
+            Ok(_) => assert!(tokens.is_err()),
         }
     }
 
     #[test]
     fn invalid_none_digit() {
-        let lexemes = lex("1 + 1.");
+        let tokens = lex("1 + 1.");
         let expected = indoc! {"
             1 + 1.
                   ^ <--- WRONG
             invalid char 'None' at position 6, expected digit"};
 
-        match lexemes {
+        match tokens {
             Err(e) => assert_eq!(expected, e.to_string()),
-            Ok(_) => assert!(lexemes.is_err()),
+            Ok(_) => assert!(tokens.is_err()),
         }
     }
 
     #[test]
     fn invalid_targ() {
-        let lexemes = lex("1 + 1 =a 2");
+        let tokens = lex("1 + 1 =a 2");
         let expected = indoc! {"
             1 + 1 =a 2
                    ^ <--- WRONG
             invalid char 'a' at position 7, expected '='"};
 
-        match lexemes {
+        match tokens {
             Err(e) => assert_eq!(expected, e.to_string()),
-            Ok(_) => assert!(lexemes.is_err()),
+            Ok(_) => assert!(tokens.is_err()),
         }
     }
 }

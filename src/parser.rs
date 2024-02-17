@@ -1,21 +1,21 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 
 use crate::{
-    lexer::{diag as lexer_diag, lex, Lexeme, LexemeKind},
-    model::Token,
+    lexer::{diag as lexer_diag, lex, Token, TokenKind},
+    model::Expr,
 };
 
 struct Parser {
-    lexemes: Vec<Lexeme>,
+    tokens: Vec<Token>,
     i: usize,
     src: String,
 }
 
 impl Parser {
-    fn unary_tree(operator: &LexemeKind, right: Token) -> Token {
+    fn unary_tree(operator: &TokenKind, right: Expr) -> Expr {
         match operator {
-            LexemeKind::LogicNot => Token::LogicNot(Box::new(right)),
-            LexemeKind::BitNot => Token::BitwiseNot(Box::new(right)),
+            TokenKind::LogicNot => Expr::LogicNot(Box::new(right)),
+            TokenKind::BitNot => Expr::BitwiseNot(Box::new(right)),
             _ => panic!(
                 "tried to create a unary tree with invalid operator {:?}",
                 operator
@@ -23,31 +23,31 @@ impl Parser {
         }
     }
 
-    fn binary_tree(left: Token, operator: &LexemeKind, right: Token) -> Token {
+    fn binary_tree(left: Expr, operator: &TokenKind, right: Expr) -> Expr {
         match operator {
-            LexemeKind::LogicOr => Token::LogicOr(Box::new(left), Box::new(right)),
-            LexemeKind::LogicAnd => Token::LogicAnd(Box::new(left), Box::new(right)),
-            LexemeKind::BitOr => Token::BitwiseOr(Box::new(left), Box::new(right)),
-            LexemeKind::BitXor => Token::BitwiseXor(Box::new(left), Box::new(right)),
-            LexemeKind::BitAnd => Token::BitwiseAnd(Box::new(left), Box::new(right)),
-            LexemeKind::EqualTo => Token::Equals(Box::new(left), Box::new(right)),
-            LexemeKind::NotEqualTo => Token::NotEquals(Box::new(left), Box::new(right)),
-            LexemeKind::LessThan => Token::LessThan(Box::new(left), Box::new(right)),
-            LexemeKind::LessThanOrEqualTo => {
-                Token::LessThanOrEquals(Box::new(left), Box::new(right))
+            TokenKind::LogicOr => Expr::LogicOr(Box::new(left), Box::new(right)),
+            TokenKind::LogicAnd => Expr::LogicAnd(Box::new(left), Box::new(right)),
+            TokenKind::BitOr => Expr::BitwiseOr(Box::new(left), Box::new(right)),
+            TokenKind::BitXor => Expr::BitwiseXor(Box::new(left), Box::new(right)),
+            TokenKind::BitAnd => Expr::BitwiseAnd(Box::new(left), Box::new(right)),
+            TokenKind::EqualTo => Expr::Equals(Box::new(left), Box::new(right)),
+            TokenKind::NotEqualTo => Expr::NotEquals(Box::new(left), Box::new(right)),
+            TokenKind::LessThan => Expr::LessThan(Box::new(left), Box::new(right)),
+            TokenKind::LessThanOrEqualTo => {
+                Expr::LessThanOrEquals(Box::new(left), Box::new(right))
             }
-            LexemeKind::GreaterThan => Token::GreaterThan(Box::new(left), Box::new(right)),
-            LexemeKind::GreaterThanOrEqualTo => {
-                Token::GreaterThanOrEquals(Box::new(left), Box::new(right))
+            TokenKind::GreaterThan => Expr::GreaterThan(Box::new(left), Box::new(right)),
+            TokenKind::GreaterThanOrEqualTo => {
+                Expr::GreaterThanOrEquals(Box::new(left), Box::new(right))
             }
-            LexemeKind::BitshiftLeft => Token::BitwiseLeftShift(Box::new(left), Box::new(right)),
-            LexemeKind::BitshiftRight => Token::BitwiseRightShift(Box::new(left), Box::new(right)),
-            LexemeKind::Add => Token::Add(Box::new(left), Box::new(right)),
-            LexemeKind::Sub => Token::Sub(Box::new(left), Box::new(right)),
-            LexemeKind::Mult => Token::Mult(Box::new(left), Box::new(right)),
-            LexemeKind::Div => Token::Div(Box::new(left), Box::new(right)),
-            LexemeKind::Mod => Token::Mod(Box::new(left), Box::new(right)),
-            LexemeKind::Exp => Token::Exp(Box::new(left), Box::new(right)),
+            TokenKind::BitshiftLeft => Expr::BitwiseLeftShift(Box::new(left), Box::new(right)),
+            TokenKind::BitshiftRight => Expr::BitwiseRightShift(Box::new(left), Box::new(right)),
+            TokenKind::Add => Expr::Add(Box::new(left), Box::new(right)),
+            TokenKind::Sub => Expr::Sub(Box::new(left), Box::new(right)),
+            TokenKind::Mult => Expr::Mult(Box::new(left), Box::new(right)),
+            TokenKind::Div => Expr::Div(Box::new(left), Box::new(right)),
+            TokenKind::Mod => Expr::Mod(Box::new(left), Box::new(right)),
+            TokenKind::Exp => Expr::Exp(Box::new(left), Box::new(right)),
             _ => panic!(
                 "tried to create binary tree with invalid operator {:?}",
                 operator
@@ -55,23 +55,23 @@ impl Parser {
         }
     }
 
-    fn peek(&self) -> Option<&LexemeKind> {
-        match self.lexemes.get(self.i) {
+    fn peek(&self) -> Option<&TokenKind> {
+        match self.tokens.get(self.i) {
             Some(v) => Some(&v.kind),
             None => None,
         }
     }
 
-    fn previous(&self) -> LexemeKind {
-        self.lexemes
+    fn previous(&self) -> TokenKind {
+        self.tokens
             .get(self.i - 1)
-            .expect("indexed lexemes at -1")
+            .expect("indexed tokens at -1")
             .kind
     }
 
-    fn prev_lexeme(&self) -> Result<&Lexeme> {
+    fn prev_token(&self) -> Result<&Token> {
         if self.i != 0 {
-            if let Some(v) = self.lexemes.get(self.i - 1) {
+            if let Some(v) = self.tokens.get(self.i - 1) {
                 return Ok(v);
             }
         }
@@ -82,7 +82,7 @@ impl Parser {
         self.i += 1;
     }
 
-    fn check(&mut self, kind: &LexemeKind) -> bool {
+    fn check(&mut self, kind: &TokenKind) -> bool {
         if let Some(v) = self.peek() {
             if v == kind {
                 self.advance();
@@ -92,22 +92,22 @@ impl Parser {
         false
     }
 
-    fn demand(&mut self, kind: &LexemeKind) -> Result<()> {
+    fn demand(&mut self, kind: &TokenKind) -> Result<()> {
         if self.check(kind) {
             Ok(())
         } else {
-            let lexeme = self.prev_lexeme()?;
-            bail!(diag(self.src.as_str(), lexeme.src.as_str(), lexeme.start))
+            let token = self.prev_token()?;
+            bail!(diag(self.src.as_str(), token.src.as_str(), token.start))
         }
     }
 
-    fn expression(&mut self) -> Result<Token> {
+    fn expression(&mut self) -> Result<Expr> {
         self.logic_or()
     }
 
-    fn logic_or(&mut self) -> Result<Token> {
+    fn logic_or(&mut self) -> Result<Expr> {
         let mut expr = self.logic_and()?;
-        while self.check(&LexemeKind::LogicOr) {
+        while self.check(&TokenKind::LogicOr) {
             let operator = self.previous();
             let right = self.logic_and()?;
             expr = Parser::binary_tree(expr, &operator, right);
@@ -115,18 +115,18 @@ impl Parser {
         Ok(expr)
     }
 
-    fn logic_and(&mut self) -> Result<Token> {
+    fn logic_and(&mut self) -> Result<Expr> {
         let mut expr = self.bit_or()?;
-        while self.check(&LexemeKind::LogicAnd) {
+        while self.check(&TokenKind::LogicAnd) {
             let operator = self.previous();
             let right = self.bit_or()?;
             expr = Parser::binary_tree(expr, &operator, right);
         }
         Ok(expr)
     }
-    fn bit_or(&mut self) -> Result<Token> {
+    fn bit_or(&mut self) -> Result<Expr> {
         let mut expr = self.bit_and()?;
-        while self.check(&LexemeKind::BitOr) {
+        while self.check(&TokenKind::BitOr) {
             let operator = self.previous();
             let right = self.bit_and()?;
             expr = Parser::binary_tree(expr, &operator, right);
@@ -134,9 +134,9 @@ impl Parser {
         Ok(expr)
     }
 
-    fn bit_and(&mut self) -> Result<Token> {
+    fn bit_and(&mut self) -> Result<Expr> {
         let mut expr = self.eq()?;
-        while self.check(&LexemeKind::BitAnd) {
+        while self.check(&TokenKind::BitAnd) {
             let operator = self.previous();
             let right = self.eq()?;
             expr = Parser::binary_tree(expr, &operator, right);
@@ -144,9 +144,9 @@ impl Parser {
         Ok(expr)
     }
 
-    fn eq(&mut self) -> Result<Token> {
+    fn eq(&mut self) -> Result<Expr> {
         let mut expr = self.meq()?;
-        while self.check(&LexemeKind::EqualTo) || self.check(&LexemeKind::NotEqualTo) {
+        while self.check(&TokenKind::EqualTo) || self.check(&TokenKind::NotEqualTo) {
             let operator = self.previous();
             let right = self.meq()?;
             expr = Parser::binary_tree(expr, &operator, right);
@@ -154,12 +154,12 @@ impl Parser {
         Ok(expr)
     }
 
-    fn meq(&mut self) -> Result<Token> {
+    fn meq(&mut self) -> Result<Expr> {
         let mut expr = self.shift()?;
-        while self.check(&LexemeKind::LessThan)
-            || self.check(&LexemeKind::LessThanOrEqualTo)
-            || self.check(&LexemeKind::GreaterThan)
-            || self.check(&LexemeKind::GreaterThanOrEqualTo)
+        while self.check(&TokenKind::LessThan)
+            || self.check(&TokenKind::LessThanOrEqualTo)
+            || self.check(&TokenKind::GreaterThan)
+            || self.check(&TokenKind::GreaterThanOrEqualTo)
         {
             let operator = self.previous();
             let right = self.shift()?;
@@ -168,9 +168,9 @@ impl Parser {
         Ok(expr)
     }
 
-    fn shift(&mut self) -> Result<Token> {
+    fn shift(&mut self) -> Result<Expr> {
         let mut expr = self.add()?;
-        while self.check(&LexemeKind::BitshiftLeft) || self.check(&LexemeKind::BitshiftRight) {
+        while self.check(&TokenKind::BitshiftLeft) || self.check(&TokenKind::BitshiftRight) {
             let operator = self.previous();
             let right = self.add()?;
             expr = Parser::binary_tree(expr, &operator, right);
@@ -178,9 +178,9 @@ impl Parser {
         Ok(expr)
     }
 
-    fn add(&mut self) -> Result<Token> {
+    fn add(&mut self) -> Result<Expr> {
         let mut expr = self.mult()?;
-        while self.check(&LexemeKind::Add) || self.check(&LexemeKind::Sub) {
+        while self.check(&TokenKind::Add) || self.check(&TokenKind::Sub) {
             let operator = self.previous();
             let right = self.mult()?;
             expr = Parser::binary_tree(expr, &operator, right);
@@ -188,11 +188,11 @@ impl Parser {
         Ok(expr)
     }
 
-    fn mult(&mut self) -> Result<Token> {
+    fn mult(&mut self) -> Result<Expr> {
         let mut expr = self.exp()?;
-        while self.check(&LexemeKind::Mult)
-            || self.check(&LexemeKind::Div)
-            || self.check(&LexemeKind::Mod)
+        while self.check(&TokenKind::Mult)
+            || self.check(&TokenKind::Div)
+            || self.check(&TokenKind::Mod)
         {
             let operator = self.previous();
             let right = self.exp()?;
@@ -201,9 +201,9 @@ impl Parser {
         Ok(expr)
     }
 
-    fn exp(&mut self) -> Result<Token> {
+    fn exp(&mut self) -> Result<Expr> {
         let mut expr = self.unary()?;
-        if self.check(&LexemeKind::Exp) {
+        if self.check(&TokenKind::Exp) {
             let operator = self.previous();
             let right = self.exp()?;
             expr = Parser::binary_tree(expr, &operator, right);
@@ -211,8 +211,8 @@ impl Parser {
         Ok(expr)
     }
 
-    fn unary(&mut self) -> Result<Token> {
-        if self.check(&LexemeKind::LogicNot) || self.check(&LexemeKind::BitNot) {
+    fn unary(&mut self) -> Result<Expr> {
+        if self.check(&TokenKind::LogicNot) || self.check(&TokenKind::BitNot) {
             let operator = self.previous();
             let right = self.unary()?;
             return Ok(Parser::unary_tree(&operator, right));
@@ -221,83 +221,83 @@ impl Parser {
         self.primary()
     }
 
-    fn paren_expression(&mut self) -> Result<Token> {
-        self.demand(&LexemeKind::LeftParen)?;
+    fn paren_expression(&mut self) -> Result<Expr> {
+        self.demand(&TokenKind::LeftParen)?;
         let inner = self.expression()?;
-        self.demand(&LexemeKind::RightParen)?;
+        self.demand(&TokenKind::RightParen)?;
         Ok(inner)
     }
 
-    fn lvalue(&mut self) -> Result<Token> {
-        self.demand(&LexemeKind::LeftSquare)?;
+    fn lvalue(&mut self) -> Result<Expr> {
+        self.demand(&TokenKind::LeftSquare)?;
         let x = self.expression()?;
-        self.demand(&LexemeKind::Comma)?;
+        self.demand(&TokenKind::Comma)?;
         let y = self.expression()?;
-        self.demand(&LexemeKind::RightSquare)?;
-        Ok(Token::LValue(Box::new(x), Box::new(y)))
+        self.demand(&TokenKind::RightSquare)?;
+        Ok(Expr::LValue(Box::new(x), Box::new(y)))
     }
 
-    fn stat_inner(&mut self) -> Result<(Token, Token)> {
-        self.demand(&LexemeKind::LeftParen)?;
+    fn stat_inner(&mut self) -> Result<(Expr, Expr)> {
+        self.demand(&TokenKind::LeftParen)?;
         let left = self.lvalue()?;
-        self.demand(&LexemeKind::Comma)?;
+        self.demand(&TokenKind::Comma)?;
         let right = self.lvalue()?;
-        self.demand(&LexemeKind::RightParen)?;
+        self.demand(&TokenKind::RightParen)?;
         Ok((left, right))
     }
 
-    fn primary(&mut self) -> Result<Token> {
+    fn primary(&mut self) -> Result<Expr> {
         self.advance();
-        let lexeme = self.prev_lexeme()?;
+        let token = self.prev_token()?;
 
-        match lexeme.kind {
-            LexemeKind::Int => {
-                let inner: i64 = lexeme.src.parse()?;
-                Ok(Token::IntPrim(inner))
+        match token.kind {
+            TokenKind::Int => {
+                let inner: i64 = token.src.parse()?;
+                Ok(Expr::IntPrim(inner))
             }
-            LexemeKind::Float => {
-                let inner: f64 = lexeme.src.parse()?;
-                Ok(Token::FloatPrim(inner))
+            TokenKind::Float => {
+                let inner: f64 = token.src.parse()?;
+                Ok(Expr::FloatPrim(inner))
             }
-            LexemeKind::Bool => {
-                let inner: bool = lexeme.src.parse()?;
-                Ok(Token::BoolPrim(inner))
+            TokenKind::Bool => {
+                let inner: bool = token.src.parse()?;
+                Ok(Expr::BoolPrim(inner))
             }
-            LexemeKind::Str => {
-                let inner = lexeme.src.clone();
+            TokenKind::Str => {
+                let inner = token.src.clone();
                 // remove outer quotations
                 let len = inner.len();
                 let inner: String = inner.chars().skip(1).take(len - 2).collect();
-                Ok(Token::StringPrim(inner))
+                Ok(Expr::StringPrim(inner))
             }
-            LexemeKind::FloatCast => {
+            TokenKind::FloatCast => {
                 let expr = self.paren_expression()?;
-                Ok(Token::CastToFloat(Box::new(expr)))
+                Ok(Expr::CastToFloat(Box::new(expr)))
             }
-            LexemeKind::IntCast => {
+            TokenKind::IntCast => {
                 let expr = self.paren_expression()?;
-                Ok(Token::CastToInt(Box::new(expr)))
+                Ok(Expr::CastToInt(Box::new(expr)))
             }
-            LexemeKind::Max | LexemeKind::Min | LexemeKind::Mean | LexemeKind::Sum => {
-                let stat = lexeme.kind.clone();
+            TokenKind::Max | TokenKind::Min | TokenKind::Mean | TokenKind::Sum => {
+                let stat = token.kind.clone();
                 let (left, right) = self.stat_inner()?;
                 match stat {
-                    LexemeKind::Max => Ok(Token::Max(Box::new(left), Box::new(right))),
-                    LexemeKind::Min => Ok(Token::Min(Box::new(left), Box::new(right))),
-                    LexemeKind::Mean => Ok(Token::Mean(Box::new(left), Box::new(right))),
-                    LexemeKind::Sum => Ok(Token::Sum(Box::new(left), Box::new(right))),
+                    TokenKind::Max => Ok(Expr::Max(Box::new(left), Box::new(right))),
+                    TokenKind::Min => Ok(Expr::Min(Box::new(left), Box::new(right))),
+                    TokenKind::Mean => Ok(Expr::Mean(Box::new(left), Box::new(right))),
+                    TokenKind::Sum => Ok(Expr::Sum(Box::new(left), Box::new(right))),
                     _ => unreachable!()
                 }
             }
-            LexemeKind::Pound => {
-                self.demand(&LexemeKind::LeftSquare)?;
+            TokenKind::Pound => {
+                self.demand(&TokenKind::LeftSquare)?;
                 let x = self.expression()?;
-                self.demand(&LexemeKind::Comma)?;
+                self.demand(&TokenKind::Comma)?;
                 let y = self.expression()?;
-                self.demand(&LexemeKind::RightSquare)?;
-                Ok(Token::RValue(Box::new(x), Box::new(y)))
+                self.demand(&TokenKind::RightSquare)?;
+                Ok(Expr::RValue(Box::new(x), Box::new(y)))
             }
-            LexemeKind::LeftSquare => {
+            TokenKind::LeftSquare => {
                 self.i -= 1;
                 self.lvalue()
             }
@@ -311,13 +311,13 @@ impl Parser {
 
 fn diag(src: &str, found: &str, pos: usize) -> String {
     let src: Box<[char]> = src.chars().collect();
-    lexer_diag(&src, "lexeme", found, pos, None)
+    lexer_diag(&src, "token", found, pos, None)
 }
 
-pub fn parse(src: &str) -> Result<Token> {
-    let lexemes = lex(src)?;
+pub fn parse(src: &str) -> Result<Expr> {
+    let tokens = lex(src)?;
     let mut parser = Parser {
-        lexemes,
+        tokens: tokens,
         i: 0,
         src: src.to_string(),
     };
@@ -337,13 +337,13 @@ mod tests {
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
-        assert_eq!(Token::IntPrim(39), res);
+        assert_eq!(Expr::IntPrim(39), res);
     }
 
     #[test]
     fn arithmetic() {
         let res = parse("(5 + 2) * 3 % 4").unwrap().eval(&Runtime::default()).unwrap();
-        assert_eq!(Token::IntPrim(1), res);
+        assert_eq!(Expr::IntPrim(1), res);
     }
 
     #[test]
@@ -352,7 +352,7 @@ mod tests {
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
-        assert_eq!(Token::IntPrim(43046721), res);
+        assert_eq!(Expr::IntPrim(43046721), res);
     }
 
     #[test]
@@ -361,20 +361,20 @@ mod tests {
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
-        assert_eq!(Token::AddrPrim(2, 7), res)
+        assert_eq!(Expr::AddrPrim(2, 7), res)
     }
 
     #[test]
     fn complex() {
         let mut runtime = Runtime::default();
         runtime
-            .set_cell(&Token::AddrPrim(9, 5), &Token::IntPrim(7))
+            .set_cell(&Expr::AddrPrim(9, 5), &Expr::IntPrim(7))
             .unwrap();
         let res = parse("#[(1 ** 1 + 7 * (2 - ~1)) / 3, (1 << 2 | 3) ** 2 / 9] == 7 == 7 > 1")
             .unwrap()
             .eval(&runtime)
             .unwrap();
-        assert_eq!(Token::BoolPrim(true), res);
+        assert_eq!(Expr::BoolPrim(true), res);
     }
 
     #[test]
@@ -383,13 +383,13 @@ mod tests {
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
-        assert_eq!(Token::IntPrim(18), res)
+        assert_eq!(Expr::IntPrim(18), res)
     }
 
     #[test]
     fn unary_bool() {
         let res = parse("!false").unwrap().eval(&Runtime::default()).unwrap();
-        assert_eq!(Token::BoolPrim(true), res);
+        assert_eq!(Expr::BoolPrim(true), res);
     }
 
     #[test]
@@ -398,7 +398,7 @@ mod tests {
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
-        assert_eq!(Token::IntPrim(6), res);
+        assert_eq!(Expr::IntPrim(6), res);
     }
 
     #[test]
@@ -407,7 +407,7 @@ mod tests {
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
-        assert_eq!(Token::BoolPrim(true), res);
+        assert_eq!(Expr::BoolPrim(true), res);
     }
 
     #[test]
@@ -416,7 +416,7 @@ mod tests {
         let expected = indoc! {"
             2 + 2 + 
                     ^ <--- WRONG
-            invalid lexeme 'None' at position 8"};
+            invalid token 'None' at position 8"};
         if let Err(e) = res {
             assert_eq!(expected, e.to_string());
         } else {
@@ -425,12 +425,12 @@ mod tests {
     }
 
     #[test]
-    fn invalid_lexeme() {
+    fn invalid_token() {
         let res = parse("2 + 2 + ^ + 2");
         let expected = indoc! {"
             2 + 2 + ^ + 2
                     ^ <--- WRONG
-            invalid lexeme '^' at position 8"};
+            invalid token '^' at position 8"};
         if let Err(e) = res {
             assert_eq!(expected, e.to_string());
         } else {
@@ -444,7 +444,7 @@ mod tests {
         let expected = indoc! {"
             +
              ^ <--- WRONG
-            invalid lexeme 'None' at position 1"};
+            invalid token 'None' at position 1"};
         if let Err(e) = res {
             assert_eq!(expected, e.to_string());
         } else {
