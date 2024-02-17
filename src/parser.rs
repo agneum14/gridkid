@@ -341,6 +341,12 @@ mod tests {
     }
 
     #[test]
+    fn arithmetic() {
+        let res = parse("(5 + 2) * 3 % 4").unwrap().eval(&Runtime::default()).unwrap();
+        assert_eq!(Token::IntPrim(1), res);
+    }
+
+    #[test]
     fn exp() {
         let res = parse("3 ** 4 ** 2")
             .unwrap()
