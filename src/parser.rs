@@ -336,15 +336,6 @@ mod tests {
     }
 
     #[test]
-    fn arithmetic() {
-        let res = parse("(5 + 2) * 3 % 4")
-            .unwrap()
-            .eval(&Runtime::default())
-            .unwrap();
-        assert_eq!(Expr::IntPrim(1), res);
-    }
-
-    #[test]
     fn exp() {
         let res = parse("3 ** 4 ** 2")
             .unwrap()
@@ -448,5 +439,48 @@ mod tests {
         } else {
             assert!(false);
         }
+    }
+
+
+    #[test]
+    fn arithmetic() {
+        let res = parse("(5 + 2) * 3 % 4")
+            .unwrap()
+            .eval(&Runtime::default())
+            .unwrap();
+        assert_eq!(Expr::IntPrim(1), res);
+    }
+
+    #[test]
+    fn rvalue_shift() {
+        let mut runtime = Runtime::default();
+        runtime.set_cell(&Expr::AddrPrim(0, 0), &Expr::IntPrim(1)).unwrap();
+        let res = parse("#[0, 0] + 3").unwrap().eval(&runtime).unwrap();
+        assert_eq!(Expr::IntPrim(4), res);
+    }
+
+    #[test]
+    fn rvalue_cmp() {
+        let mut runtime = Runtime::default();
+        runtime.set_cell(&Expr::AddrPrim(0, 0), &Expr::IntPrim(1)).unwrap();
+        runtime.set_cell(&Expr::AddrPrim(1, 1), &Expr::IntPrim(7)).unwrap();
+        let res = parse("#[1 - 1, 0] < #[1 * 1, 1]").unwrap().eval(&runtime).unwrap();
+        assert_eq!(Expr::BoolPrim(true), res);
+    }
+
+    #[test]
+    fn logic_cmp() {
+        let runtime = Runtime::default();
+        let res = parse("5 > 3 && !(2 > 8)").unwrap().eval(&runtime).unwrap();
+        assert_eq!(Expr::BoolPrim(true), res);
+    }
+
+    // the sum test can be found in model
+
+    #[test]
+    fn casting() {
+        let runtime = Runtime::default();
+        let res = parse("float(10) / 4.0").unwrap().eval(&runtime).unwrap();
+        assert_eq!(Expr::FloatPrim(2.5), res);
     }
 }

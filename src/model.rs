@@ -302,18 +302,14 @@ impl Expr {
             Self::Exp(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 match (a, b) {
-                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => {
-                        Ok(Expr::IntPrim(av.pow(*bv as u32)))
-                    }
+                    (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av.pow(*bv as u32))),
                     (Expr::IntPrim(av), Expr::FloatPrim(bv)) => {
                         Ok(Expr::FloatPrim((*av as f64).powf(*bv)))
                     }
                     (Expr::FloatPrim(av), Expr::IntPrim(bv)) => {
                         Ok(Expr::FloatPrim(av.powi(*bv as i32)))
                     }
-                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => {
-                        Ok(Expr::FloatPrim(av.powf(*bv)))
-                    }
+                    (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::FloatPrim(av.powf(*bv))),
                     _ => bail!("cannot exponentiate types {} and {}", a, b),
                 }
             }
@@ -638,7 +634,10 @@ mod tests {
     #[test]
     fn sum_parsed() {
         let (runtime, nums) = build_runtime_grid(1, 2, 5, 3);
-        let res = parse("sum([1, 2], [5, 3])").unwrap().eval(&runtime).unwrap();
+        let res = parse("sum([1, 2], [5, 3])")
+            .unwrap()
+            .eval(&runtime)
+            .unwrap();
         let sum = nums.iter().sum::<i64>();
         assert_eq!(Expr::IntPrim(sum), res)
     }
@@ -792,9 +791,7 @@ mod tests {
 
         let x = Expr::LValue(Box::new(Expr::IntPrim(7)), Box::new(Expr::IntPrim(24)));
         let y = Expr::LValue(Box::new(Expr::IntPrim(2)), Box::new(Expr::IntPrim(15)));
-        let res = Expr::Mean(Box::new(y), Box::new(x))
-            .eval(&runtime)
-            .unwrap();
+        let res = Expr::Mean(Box::new(y), Box::new(x)).eval(&runtime).unwrap();
 
         let mean = nums.iter().sum::<i64>() as f64 / nums.len() as f64;
         assert_eq!(Expr::FloatPrim(mean), res)
@@ -845,5 +842,17 @@ mod tests {
     fn invalid_shift_left() {
         let x = parse("1 << 2.0").unwrap().eval(&Runtime::default());
         assert!(x.is_err());
+    }
+
+    #[test]
+    fn sum2() {
+        let (runtime, nums) = build_runtime_grid(0, 0, 2, 1);
+        let sum = nums.iter().sum::<i64>();
+        let expected = Expr::IntPrim(sum + 1);
+        let res = parse("1 + sum([0, 0], [2, 1])")
+            .unwrap()
+            .eval(&runtime)
+            .unwrap();
+        assert_eq!(expected, res)
     }
 }
