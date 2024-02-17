@@ -35,9 +35,7 @@ impl Parser {
             TokenKind::EqualTo => Expr::Equals(Box::new(left), Box::new(right)),
             TokenKind::NotEqualTo => Expr::NotEquals(Box::new(left), Box::new(right)),
             TokenKind::LessThan => Expr::LessThan(Box::new(left), Box::new(right)),
-            TokenKind::LessThanOrEqualTo => {
-                Expr::LessThanOrEquals(Box::new(left), Box::new(right))
-            }
+            TokenKind::LessThanOrEqualTo => Expr::LessThanOrEquals(Box::new(left), Box::new(right)),
             TokenKind::GreaterThan => Expr::GreaterThan(Box::new(left), Box::new(right)),
             TokenKind::GreaterThanOrEqualTo => {
                 Expr::GreaterThanOrEquals(Box::new(left), Box::new(right))
@@ -314,7 +312,7 @@ fn diag(src: &str, found: &str, pos: usize) -> String {
 pub fn parse(src: &str) -> Result<Expr> {
     let tokens = lex(src)?;
     let mut parser = Parser {
-        tokens: tokens,
+        tokens,
         i: 0,
         src: src.to_string(),
     };
@@ -339,7 +337,10 @@ mod tests {
 
     #[test]
     fn arithmetic() {
-        let res = parse("(5 + 2) * 3 % 4").unwrap().eval(&Runtime::default()).unwrap();
+        let res = parse("(5 + 2) * 3 % 4")
+            .unwrap()
+            .eval(&Runtime::default())
+            .unwrap();
         assert_eq!(Expr::IntPrim(1), res);
     }
 
