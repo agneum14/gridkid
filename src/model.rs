@@ -314,18 +314,34 @@ impl Expr {
                 }
             }
             Self::LogicAnd(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
-                match (a, b) {
-                    (Expr::BoolPrim(av), Expr::BoolPrim(bv)) => Ok(Expr::BoolPrim(*av && *bv)),
-                    _ => bail!("cannot logic and types {} and {}", a, b),
+                let a = &a.eval(runtime)?;
+                if let Expr::BoolPrim(av) = *a {
+                    if !av {
+                        return Ok(Expr::BoolPrim(false));
+                    }
+
+                    let b = &b.eval(runtime)?;
+                    if let Expr::BoolPrim(bv) = *b {
+                        return Ok(Expr::BoolPrim(av && bv));
+                    }
                 }
+
+                bail!("cannot logic and types {} and {}", a, b);
             }
             Self::LogicOr(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
-                match (a, b) {
-                    (Expr::BoolPrim(av), Expr::BoolPrim(bv)) => Ok(Expr::BoolPrim(*av || *bv)),
-                    _ => bail!("cannot logic or types {} and {}", a, b),
+                let a = &a.eval(runtime)?;
+                if let Expr::BoolPrim(av) = *a {
+                    if av {
+                        return Ok(Expr::BoolPrim(true));
+                    }
+
+                    let b = &b.eval(runtime)?;
+                    if let Expr::BoolPrim(bv) = *b {
+                        return Ok(Expr::BoolPrim(av || bv));
+                    }
                 }
+
+                bail!("cannot logic or types {} and {}", a, b);
             }
             Self::LogicNot(a) => {
                 let a = &a.eval(runtime)?;
@@ -854,5 +870,23 @@ mod tests {
             .eval(&runtime)
             .unwrap();
         assert_eq!(expected, res)
+    }
+
+    #[test]
+    fn short_circuit_or() {
+        let res = parse("true || 7")
+            .unwrap()
+            .eval(&Runtime::default())
+            .unwrap();
+        assert_eq!(Expr::BoolPrim(true), res);
+    }
+
+    #[test]
+    fn short_circuit_and() {
+        let res = parse("false && 7")
+            .unwrap()
+            .eval(&Runtime::default())
+            .unwrap();
+        assert_eq!(Expr::BoolPrim(false), res);
     }
 }
