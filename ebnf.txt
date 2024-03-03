@@ -11,7 +11,7 @@ shift       = add { ( ">>" "<<" ) add }
 add         = mult { ( "+" "-" ) mult }
 mult        = exp { ( "*" "/" "%" ) exp }
 exp         = unary { "*" "*" unary }
-unary       = primary { ( "!" | "~" ) primary }
+unary       = primary { ( "!" | "~" | "-" ) primary }
 
 paren_expr  = "(" expr ")"
 float_cast  = "float" paren_expr

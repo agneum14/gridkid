@@ -14,6 +14,7 @@ struct Parser {
 impl Parser {
     fn unary_tree(operator: &TokenKind, right: Expr) -> Expr {
         match operator {
+            TokenKind::Minus => Expr::Neg(Box::new(right)),
             TokenKind::LogicNot => Expr::LogicNot(Box::new(right)),
             TokenKind::BitNot => Expr::BitwiseNot(Box::new(right)),
             TokenKind::IntCast => Expr::CastToInt(Box::new(right)),
@@ -43,7 +44,7 @@ impl Parser {
             TokenKind::BitshiftLeft => Expr::BitwiseLeftShift(Box::new(left), Box::new(right)),
             TokenKind::BitshiftRight => Expr::BitwiseRightShift(Box::new(left), Box::new(right)),
             TokenKind::Add => Expr::Add(Box::new(left), Box::new(right)),
-            TokenKind::Sub => Expr::Sub(Box::new(left), Box::new(right)),
+            TokenKind::Minus => Expr::Sub(Box::new(left), Box::new(right)),
             TokenKind::Mult => Expr::Mult(Box::new(left), Box::new(right)),
             TokenKind::Div => Expr::Div(Box::new(left), Box::new(right)),
             TokenKind::Mod => Expr::Mod(Box::new(left), Box::new(right)),
@@ -184,7 +185,7 @@ impl Parser {
 
     fn add(&mut self) -> Result<Expr> {
         let mut expr = self.mult()?;
-        while self.check(&TokenKind::Add) || self.check(&TokenKind::Sub) {
+        while self.check(&TokenKind::Add) || self.check(&TokenKind::Minus) {
             let operator = self.previous();
             let right = self.mult()?;
             expr = Parser::binary_tree(expr, &operator, right);
@@ -216,7 +217,10 @@ impl Parser {
     }
 
     fn unary(&mut self) -> Result<Expr> {
-        if self.check(&TokenKind::LogicNot) || self.check(&TokenKind::BitNot) {
+        if self.check(&TokenKind::LogicNot)
+            || self.check(&TokenKind::BitNot)
+            || self.check(&TokenKind::Minus)
+        {
             let operator = self.previous();
             let right = self.unary()?;
             return Ok(Parser::unary_tree(&operator, right));
@@ -391,6 +395,30 @@ mod tests {
     }
 
     #[test]
+    fn unary_minus_basic() {
+        let res = parse("1 - -2").unwrap().eval(&Runtime::default()).unwrap();
+        assert_eq!(Expr::IntPrim(3), res);
+    }
+
+    #[test]
+    fn unary_minus_complex() {
+        let res = parse("1 - -(-3 - 1)")
+            .unwrap()
+            .eval(&Runtime::default())
+            .unwrap();
+        assert_eq!(Expr::IntPrim(-3), res);
+    }
+
+    #[test]
+    fn unary_minus_float() {
+        let res = parse("1 - -(-3.0 - 1)")
+            .unwrap()
+            .eval(&Runtime::default())
+            .unwrap();
+        assert_eq!(Expr::FloatPrim(-3.0), res);
+    }
+
+    #[test]
     fn comparisons() {
         let res = parse("1 <= 1 && 1 < 2 && 2 >= 2 && 2 > 1 && 1 != 2")
             .unwrap()
@@ -441,7 +469,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn arithmetic() {
         let res = parse("(5 + 2) * 3 % 4")
@@ -454,7 +481,9 @@ mod tests {
     #[test]
     fn rvalue_shift() {
         let mut runtime = Runtime::default();
-        runtime.set_cell(&Expr::AddrPrim(0, 0), &Expr::IntPrim(1)).unwrap();
+        runtime
+            .set_cell(&Expr::AddrPrim(0, 0), &Expr::IntPrim(1))
+            .unwrap();
         let res = parse("#[0, 0] + 3").unwrap().eval(&runtime).unwrap();
         assert_eq!(Expr::IntPrim(4), res);
     }
@@ -462,9 +491,16 @@ mod tests {
     #[test]
     fn rvalue_cmp() {
         let mut runtime = Runtime::default();
-        runtime.set_cell(&Expr::AddrPrim(0, 0), &Expr::IntPrim(1)).unwrap();
-        runtime.set_cell(&Expr::AddrPrim(1, 1), &Expr::IntPrim(7)).unwrap();
-        let res = parse("#[1 - 1, 0] < #[1 * 1, 1]").unwrap().eval(&runtime).unwrap();
+        runtime
+            .set_cell(&Expr::AddrPrim(0, 0), &Expr::IntPrim(1))
+            .unwrap();
+        runtime
+            .set_cell(&Expr::AddrPrim(1, 1), &Expr::IntPrim(7))
+            .unwrap();
+        let res = parse("#[1 - 1, 0] < #[1 * 1, 1]")
+            .unwrap()
+            .eval(&runtime)
+            .unwrap();
         assert_eq!(Expr::BoolPrim(true), res);
     }
 

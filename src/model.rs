@@ -140,6 +140,7 @@ pub enum Expr {
     Div(Box<Expr>, Box<Expr>),
     Mod(Box<Expr>, Box<Expr>),
     Exp(Box<Expr>, Box<Expr>),
+    Neg(Box<Expr>),
 
     // logical
     LogicAnd(Box<Expr>, Box<Expr>),
@@ -191,6 +192,7 @@ impl Display for Expr {
             Self::Div(_, _) => write!(f, "Div"),
             Self::Mod(_, _) => write!(f, "Mod"),
             Self::Exp(_, _) => write!(f, "Exp"),
+            Self::Neg(_) => write!(f, "Neg"),
             Self::LogicAnd(_, _) => write!(f, "LogicAnd"),
             Self::LogicOr(_, _) => write!(f, "LogicOr"),
             Self::LogicNot(_) => write!(f, "LogicNot"),
@@ -311,6 +313,14 @@ impl Expr {
                     }
                     (Expr::FloatPrim(av), Expr::FloatPrim(bv)) => Ok(Expr::FloatPrim(av.powf(*bv))),
                     _ => bail!("cannot exponentiate types {} and {}", a, b),
+                }
+            }
+            Self::Neg(a) => {
+                let a = a.eval(runtime)?;
+                match a {
+                    Expr::IntPrim(av) => Ok(Expr::IntPrim(-1 * av)),
+                    Expr::FloatPrim(av) => Ok(Expr::FloatPrim(-1.0 * av)),
+                    _ => bail!("cannot negate type {}", a),
                 }
             }
             Self::LogicAnd(a, b) => {
@@ -533,6 +543,7 @@ impl Expr {
             Self::Mult(a, b) => format!("({} * {})", a.serialize(), b.serialize()),
             Self::Div(a, b) => format!("({} / {})", a.serialize(), b.serialize()),
             Self::Exp(a, b) => format!("({}^{})", a.serialize(), b.serialize()),
+            Self::Neg(a) => format!("-{}", a.serialize()),
             Self::Mod(a, b) => format!("({} % {})", a.serialize(), b.serialize()),
             Self::LogicAnd(a, b) => format!("({} && {})", a.serialize(), b.serialize()),
             Self::LogicOr(a, b) => format!("({} || {})", a.serialize(), b.serialize()),

@@ -16,7 +16,7 @@ pub enum TokenKind {
     BitshiftRight,
     BitshiftLeft,
     Add,
-    Sub,
+    Minus,
     Mult,
     Div,
     Mod,
@@ -168,7 +168,7 @@ impl Lexer {
             self.start = self.i;
             match self.src.get(self.i).unwrap() {
                 '+' => self.cap_emit(TokenKind::Add),
-                '-' => self.cap_emit(TokenKind::Sub),
+                '-' => self.cap_emit(TokenKind::Minus),
                 '/' => self.cap_emit(TokenKind::Div),
                 '%' => self.cap_emit(TokenKind::Mod),
                 '(' => self.cap_emit(TokenKind::LeftParen),
@@ -385,7 +385,7 @@ mod tests {
             TokenKind::Pound,
             TokenKind::LeftSquare,
             TokenKind::Int,
-            TokenKind::Sub,
+            TokenKind::Minus,
             TokenKind::Float,
             TokenKind::Comma,
             TokenKind::Int,
