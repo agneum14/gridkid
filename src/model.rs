@@ -8,7 +8,7 @@ pub const GRID_WIDTH: usize = 13;
 pub struct Cell {
     pub ast: Option<Expr>,
     pub eval: Option<Result<Expr>>,
-    pub src: String
+    pub src: String,
 }
 
 impl Default for Cell {
@@ -16,7 +16,7 @@ impl Default for Cell {
         Self {
             ast: None,
             eval: None,
-            src: "".to_string()
+            src: "".to_string(),
         }
     }
 }
@@ -136,27 +136,18 @@ impl Runtime {
     fn eval_range(&self, addr1: &Expr, addr2: &Expr) -> Result<Vec<Expr>> {
         let cells = self.cell_range(addr1, addr2)?;
 
-        // Ok(cells
-        //     .iter()
-        //     .flat_map(|c| match c.eval.as_ref() {
-        //         Some(v) => match v {
-        //             Expr::IntPrim(_) => Ok(v),
-        //             _ => bail!("cannot perform statistics on type {}", v),
-        //         },
-        //         None => bail!("accessed empty cell"),
-        //     })
-        //     .collect())
         let mut evals: Vec<Expr> = Vec::new();
         for cell in cells {
             let expr = match &cell.eval {
                 Some(v) => match v {
                     Ok(v) => match v {
-                        Expr::IntPrim(_) => v,
-                        _ => bail!("cannot perform statistics on type {}", v)
+                        Expr::IntPrim(v) => Expr::FloatPrim(*v as f64),
+                        Expr::FloatPrim(v) => Expr::FloatPrim(*v),
+                        _ => bail!("cannot perform statistics on type {}", v),
                     },
-                    Err(_) => bail!("one of the cells in range contains an error")
+                    Err(_) => bail!("one of the cells in range contains an error"),
                 },
-                None => bail!("accessed empty cell")
+                None => bail!("accessed empty cell"),
             };
             evals.push(expr.clone());
         }
@@ -261,6 +252,14 @@ impl Display for Expr {
 }
 
 impl Expr {
+    /// Get the inner value of an FloatPrim
+    fn inner_float_prim(&self) -> Result<f64> {
+        match self {
+            Expr::FloatPrim(a) => Ok(*a),
+            _ => bail!("{} is not a FloatPrim", self),
+        }
+    }
+ 
     /// Get the inner value of an IntPrim
     fn inner_int_prim(&self) -> Result<i64> {
         match self {
@@ -404,15 +403,13 @@ impl Expr {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let addr = Self::new_addr_prim(a, b)?;
                 let cell = runtime.cell(&addr)?;
-                let (x, y) = (a.inner_int_prim().unwrap(), b.inner_int_prim().unwrap());
-                // let x = cell.eval
-                //     .context(format!("accessed empty cell ({}, {})", x, y))?
+                let (x, y) = (a.inner_int_prim()?, b.inner_int_prim()?);
                 let eval = match &cell.eval {
                     Some(v) => match v {
                         Ok(v) => v.clone(),
-                        Err(_) => bail!("accessed cell with error ({}, {})", x, y)
+                        Err(_) => bail!("accessed cell with error ({}, {})", x, y),
                     },
-                    None => bail!("accessed empty cell ({}, {})", x, y)
+                    None => bail!("accessed empty cell ({}, {})", x, y),
                 };
                 Ok(eval)
             }
@@ -536,31 +533,41 @@ impl Expr {
             }
             Self::Max(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
-                let evals = runtime.eval_range(a, b)?;
-                let max = evals
+                let vals: Vec<f64> = runtime
+                    .eval_range(a, b)?
                     .iter()
-                    .map(|x| x.inner_int_prim().unwrap())
-                    .max()
-                    .unwrap();
-                Ok(Expr::IntPrim(max))
+                    .map(|x| x.inner_float_prim().unwrap())
+                    .collect();
+                let mut max = std::f64::NEG_INFINITY;
+                for v in vals {
+                    if v > max {
+                        max = v;
+                    }
+                }
+                Ok(Expr::FloatPrim(max))
             }
             Self::Min(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
-                let evals = runtime.eval_range(a, b)?;
-                let min = evals
+                let vals: Vec<f64> = runtime
+                    .eval_range(a, b)?
                     .iter()
-                    .map(|x| x.inner_int_prim().unwrap())
-                    .min()
-                    .unwrap();
-                Ok(Expr::IntPrim(min))
+                    .map(|x| x.inner_float_prim().unwrap())
+                    .collect();
+                let mut min = std::f64::INFINITY;
+                for v in vals {
+                    if v < min {
+                        min = v;
+                    }
+                }
+                Ok(Expr::FloatPrim(min))
             }
             Self::Mean(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
                 let evals = runtime.eval_range(a, b)?;
                 let mean = evals
                     .iter()
-                    .map(|x| x.inner_int_prim().unwrap())
-                    .sum::<i64>() as f64
+                    .map(|x| x.inner_float_prim().unwrap())
+                    .sum::<f64>() as f64
                     / evals.len() as f64;
                 Ok(Self::FloatPrim(mean))
             }
@@ -569,9 +576,9 @@ impl Expr {
                 let evals = runtime.eval_range(a, b)?;
                 let sum = evals
                     .iter()
-                    .map(|x| x.inner_int_prim().unwrap())
-                    .sum::<i64>();
-                Ok(Expr::IntPrim(sum))
+                    .map(|x| x.inner_float_prim().unwrap())
+                    .sum::<f64>();
+                Ok(Expr::FloatPrim(sum))
             }
         }
     }
