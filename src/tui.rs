@@ -1,15 +1,19 @@
-use std::io::{self, stdout, Stdout};
+use std::{
+    io::{self, stdout, Stdout},
+    rc::Rc,
+};
 
 use crossterm::{execute, terminal::*};
 use ratatui::{
     prelude::*,
     symbols::border,
-    widgets::{
-        block::{Title, *}, Block, Borders, Paragraph, Row, Table
-    },
+    widgets::{block::Title, Block, Borders, Cell, Paragraph},
 };
 
-use crate::App;
+use crate::{
+    model::{Expr, GRID_WITH},
+    App,
+};
 
 /// A type alias for the terminal type used in this application
 pub type Tui = Terminal<CrosstermBackend<Stdout>>;
@@ -33,7 +37,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints(vec![
             Constraint::Length(1),
-            Constraint::Percentage(25),
+            Constraint::Percentage(10),
             Constraint::Min(1),
         ])
         .split(f.size());
@@ -48,16 +52,58 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     render_editor(f, horizontal[0]);
     render_display(f, horizontal[1]);
 
-    render_table(f, vertical[2]);
+    render_table(f, vertical[2], app);
 }
 
-fn render_table(f: &mut Frame, area: Rect) {
-    let title = Title::from(" Table ".bold().light_green());
-    let block = Block::default()
-        .title(title.alignment(Alignment::Center))
-        .borders(Borders::ALL)
-        .border_set(border::THICK);
-    f.render_widget(block, area)
+fn render_table(f: &mut Frame, area: Rect, app: &App) {
+    // let title = Title::from(" Table ".bold().light_green());
+    // let block = Block::default()
+    //     .title(title.alignment(Alignment::Center))
+    //     .borders(Borders::ALL)
+    //     .border_set(border::THICK);
+    // f.render_widget(block, area);
+
+    let grid_constraints: Vec<Constraint> = (0..GRID_WITH)
+        .into_iter()
+        .map(|_| Constraint::Min(1))
+        .collect();
+
+    let col_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(&grid_constraints)
+        .split(area);
+    let row_layouts: Vec<Rc<[Rect]>> = (0..GRID_WITH)
+        .into_iter()
+        .map(|i| {
+            Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(&grid_constraints)
+                .split(col_layout[i])
+        })
+        .collect();
+
+    for row in 0..GRID_WITH {
+        for col in 0..GRID_WITH {
+            let para = make_cell(row, col, app);
+            f.render_widget(para, row_layouts[row][col]);
+        }
+    }
+}
+
+fn make_cell(x: usize, y: usize, app: &App) -> Paragraph {
+    let runtime = &app.runtime;
+    let cell_data = runtime.cell(&Expr::AddrPrim(x, y)).unwrap();
+    let text = match &cell_data.eval {
+        Some(v) => v.serialize(),
+        None => String::from(""),
+    };
+
+    let mut border_color = Color::White;
+    if (x, y) == app.cursor {
+        border_color = Color::LightRed;
+    }
+    let block = Block::new().borders(Borders::ALL).set_style(border_color);
+    Paragraph::new(text).block(block)
 }
 
 fn render_editor(f: &mut Frame, area: Rect) {

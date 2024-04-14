@@ -2,9 +2,12 @@ use std::fmt::Display;
 
 use anyhow::{bail, ensure, Context, Result};
 
-struct Cell {
+pub const GRID_WITH: usize = 13;
+
+#[derive(Debug)]
+pub struct Cell {
     ast: Option<Expr>,
-    eval: Option<Expr>,
+    pub eval: Option<Expr>,
 }
 
 impl Default for Cell {
@@ -16,6 +19,7 @@ impl Default for Cell {
     }
 }
 
+#[derive(Debug)]
 struct Grid {
     cells: Vec<Cell>,
 }
@@ -56,6 +60,7 @@ impl Grid {
     }
 }
 
+#[derive(Debug)]
 pub struct Runtime {
     grid: Grid,
 }
@@ -70,7 +75,7 @@ impl Default for Runtime {
 
 impl Runtime {
     /// Get a cell reference from an AddrPrim
-    fn cell(&self, addr: &Expr) -> Result<&Cell> {
+    pub fn cell(&self, addr: &Expr) -> Result<&Cell> {
         self.grid.cell(addr)
     }
 
@@ -531,7 +536,7 @@ impl Expr {
     }
 
     /// Serialize an Expr, recursing through the AST
-    fn serialize(&self) -> String {
+    pub fn serialize(&self) -> String {
         match self {
             Self::IntPrim(a) => format!("{}", a),
             Self::FloatPrim(a) => format!("{}", a),

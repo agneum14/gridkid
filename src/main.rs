@@ -1,6 +1,7 @@
 use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use model::Runtime;
 use tui::ui;
 
 mod lexer;
@@ -18,6 +19,8 @@ fn main() -> io::Result<()> {
 #[derive(Debug, Default)]
 pub struct App {
     exit: bool,
+    runtime: Runtime,
+    cursor: (usize, usize),
 }
 
 impl App {
