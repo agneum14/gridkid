@@ -7,7 +7,8 @@ pub const GRID_WITH: usize = 13;
 #[derive(Debug)]
 pub struct Cell {
     ast: Option<Expr>,
-    pub eval: Option<Expr>,
+    pub eval: Option<Result<Expr>>,
+    pub src: String
 }
 
 impl Default for Cell {
@@ -15,6 +16,7 @@ impl Default for Cell {
         Self {
             ast: None,
             eval: None,
+            src: "".to_string()
         }
     }
 }
@@ -86,7 +88,7 @@ impl Runtime {
 
     /// Set a cell from an AddrPrim and AST
     pub fn set_cell(&mut self, addr: &Expr, ast: &Expr) -> Result<()> {
-        let eval = ast.eval(self)?;
+        let eval = ast.eval(self);
         let cell = self.cell_mut(addr)?;
         cell.ast = Some(ast.clone());
         cell.eval = Some(eval);
@@ -113,19 +115,34 @@ impl Runtime {
     }
 
     /// Get the evals of cells in a bounding box of two AddrPrims
-    fn eval_range(&self, addr1: &Expr, addr2: &Expr) -> Result<Vec<&Expr>> {
+    fn eval_range(&self, addr1: &Expr, addr2: &Expr) -> Result<Vec<Expr>> {
         let cells = self.cell_range(addr1, addr2)?;
 
-        Ok(cells
-            .iter()
-            .flat_map(|c| match c.eval.as_ref() {
+        // Ok(cells
+        //     .iter()
+        //     .flat_map(|c| match c.eval.as_ref() {
+        //         Some(v) => match v {
+        //             Expr::IntPrim(_) => Ok(v),
+        //             _ => bail!("cannot perform statistics on type {}", v),
+        //         },
+        //         None => bail!("accessed empty cell"),
+        //     })
+        //     .collect())
+        let mut evals: Vec<Expr> = Vec::new();
+        for cell in cells {
+            let expr = match &cell.eval {
                 Some(v) => match v {
-                    Expr::IntPrim(_) => Ok(v),
-                    _ => bail!("cannot perform statistics on type {}", v),
+                    Ok(v) => match v {
+                        Expr::IntPrim(_) => v,
+                        _ => bail!("cannot perform statistics on type {}", v)
+                    },
+                    Err(_) => bail!("one of the cells in range contains an error")
                 },
-                None => bail!("accessed empty cell"),
-            })
-            .collect())
+                None => bail!("accessed empty cell")
+            };
+            evals.push(expr.clone());
+        }
+        Ok(evals)
     }
 }
 
@@ -370,10 +387,16 @@ impl Expr {
                 let addr = Self::new_addr_prim(a, b)?;
                 let cell = runtime.cell(&addr)?;
                 let (x, y) = (a.inner_int_prim().unwrap(), b.inner_int_prim().unwrap());
-                cell.eval
-                    .as_ref()
-                    .cloned()
-                    .context(format!("accessed empty cell ({}, {})", x, y))
+                // let x = cell.eval
+                //     .context(format!("accessed empty cell ({}, {})", x, y))?
+                let eval = match &cell.eval {
+                    Some(v) => match v {
+                        Ok(v) => v.clone(),
+                        Err(_) => bail!("accessed cell with error ({}, {})", x, y)
+                    },
+                    None => bail!("accessed empty cell ({}, {})", x, y)
+                };
+                Ok(eval)
             }
             Self::LValue(a, b) => {
                 let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);

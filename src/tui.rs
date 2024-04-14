@@ -86,10 +86,7 @@ fn render_table(f: &mut Frame, area: Rect, app: &App) {
 fn make_cell(x: usize, y: usize, app: &App) -> Paragraph {
     let runtime = &app.runtime;
     let cell_data = runtime.cell(&Expr::AddrPrim(x, y)).unwrap();
-    let text = match &cell_data.eval {
-        Some(v) => v.serialize(),
-        None => String::from(""),
-    };
+    let text = "";
 
     let mut border_color = Color::White;
     if (x, y) == app.cursor {
