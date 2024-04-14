@@ -95,6 +95,24 @@ impl Runtime {
         Ok(())
     }
 
+    pub fn set_cell_ast(&mut self, addr: &Expr, ast: Option<Expr>) -> Result<()> {
+        let cell = self.cell_mut(addr)?;
+        cell.ast = ast;
+        Ok(())
+    }
+
+    pub fn set_cell_eval(&mut self, addr: &Expr, eval: Option<Result<Expr>>) -> Result<()> {
+        let cell = self.cell_mut(addr)?;
+        cell.eval = eval;
+        Ok(())
+    }
+
+    pub fn set_cell_src(&mut self, addr: &Expr, src: String) -> Result<()> {
+        let cell = self.cell_mut(addr)?;
+        cell.src = src;
+        Ok(())
+    }
+
     /// Get references to cells in a bounding box of two AddrPrims
     fn cell_range(&self, addr1: &Expr, addr2: &Expr) -> Result<Vec<&Cell>> {
         let (x1, y1, x2, y2) = match (addr1, addr2) {

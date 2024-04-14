@@ -1,8 +1,11 @@
-use std::io;
+use std::{default, io};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use model::{Runtime, GRID_WITH};
+use lexer::lex;
+use model::{Expr, Runtime, GRID_WITH};
+use parser::parse;
 use tui::ui;
+use tui_textarea::TextArea;
 
 mod lexer;
 mod model;
@@ -16,14 +19,23 @@ fn main() -> io::Result<()> {
     app_result
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub enum Mode {
+    #[default]
+    Grid,
+    Editor,
+}
+
 #[derive(Debug, Default)]
-pub struct App {
+pub struct App<'a> {
     exit: bool,
     runtime: Runtime,
     cursor: (usize, usize),
+    editor: TextArea<'a>,
+    mode: Mode,
 }
 
-impl App {
+impl App<'_> {
     /// runs the application's main loop until the user quits
     pub fn run(&mut self, terminal: &mut tui::Tui) -> io::Result<()> {
         while !self.exit {
@@ -45,13 +57,70 @@ impl App {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
-            KeyCode::Char('q') => self.exit(),
-            KeyCode::Char('h') => self.decrement_cursor_x(),
-            KeyCode::Char('j') => self.increment_cursor_y(),
-            KeyCode::Char('k') => self.decrement_cursor_y(),
-            KeyCode::Char('l') => self.increment_cursor_x(),
+            KeyCode::Esc => self.mode = Mode::Grid,
+            KeyCode::Enter => {
+                self.mode = Mode::Grid;
+                self.evaluate();
+            }
             _ => {}
         }
+
+        if self.mode == Mode::Grid {
+            match key_event.code {
+                KeyCode::Char('q') => self.exit(),
+                KeyCode::Char('h') => self.decrement_cursor_x(),
+                KeyCode::Char('j') => self.increment_cursor_y(),
+                KeyCode::Char('k') => self.decrement_cursor_y(),
+                KeyCode::Char('l') => self.increment_cursor_x(),
+                KeyCode::Char('i') => self.mode = Mode::Editor,
+                _ => {}
+            }
+        } else {
+            self.editor.input(key_event);
+        }
+    }
+
+    fn evaluate(&mut self) {
+        let text = self.editor.lines()[0].clone();
+        let (x, y) = self.cursor;
+        let addr = &Expr::AddrPrim(x, y);
+
+        if let Ok(v) = text.parse::<f64>() {
+            self.runtime.set_cell(addr, &Expr::FloatPrim(v)).unwrap();
+        } else if let Ok(v) = text.parse::<bool>() {
+            self.runtime.set_cell(addr, &Expr::BoolPrim(v)).unwrap();
+        } else if let Ok(v) = text.parse::<i64>() {
+            self.runtime.set_cell(addr, &Expr::IntPrim(v)).unwrap();
+        } else {
+            if text != "" && text.chars().nth(0).unwrap() == '=' {
+                let text: String = text.chars().skip(1).collect();
+                let res = parse(&text);
+                let eval;
+                let ast;
+
+                match res {
+                    Ok(v) => {
+                        ast = Some(v);
+                        eval = Some(ast.clone().unwrap().eval(&self.runtime));
+                    }
+                    Err(e) => {
+                        ast = None;
+                        eval = Some(Err(e))
+                    }
+                }
+                self.runtime.set_cell_ast(addr, ast).unwrap();
+                self.runtime.set_cell_eval(addr, eval).unwrap();
+            } else {
+                self.runtime
+                    .set_cell_ast(addr, Some(Expr::StringPrim(text.clone())))
+                    .unwrap();
+                self.runtime
+                    .set_cell_eval(addr, Some(Ok(Expr::StringPrim(text.clone()))))
+                    .unwrap();
+            }
+        }
+
+        self.runtime.set_cell_src(addr, text).unwrap();
     }
 
     fn exit(&mut self) {
@@ -62,7 +131,7 @@ impl App {
         let (x, y) = self.cursor;
         let new_x = match x {
             0 => 0,
-            v => v - 1
+            v => v - 1,
         };
         self.cursor = (new_x, y);
     }
@@ -89,7 +158,7 @@ impl App {
         let (x, y) = self.cursor;
         let new_y = match y {
             0 => 0,
-            v => v - 1
+            v => v - 1,
         };
         self.cursor = (x, new_y);
     }

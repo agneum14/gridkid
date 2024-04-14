@@ -12,7 +12,7 @@ use ratatui::{
 
 use crate::{
     model::{Expr, GRID_WITH},
-    App,
+    App, Mode,
 };
 
 /// A type alias for the terminal type used in this application
@@ -49,7 +49,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 
     render_heading(f, vertical[0]);
 
-    render_editor(f, horizontal[0]);
+    render_editor(f, horizontal[0], app);
     render_display(f, horizontal[1]);
 
     render_table(f, vertical[2], app);
@@ -83,10 +83,16 @@ fn render_table(f: &mut Frame, area: Rect, app: &App) {
     }
 }
 
-fn make_cell(x: usize, y: usize, app: &App) -> Paragraph {
+fn make_cell<'a>(x: usize, y: usize, app: &App<'a>) -> Paragraph<'a> {
     let runtime = &app.runtime;
     let cell_data = runtime.cell(&Expr::AddrPrim(x, y)).unwrap();
-    let text = "";
+    let text = match &cell_data.eval {
+        Some(v) => match v {
+            Ok(v) => v.serialize(),
+            Err(e) => e.to_string()
+        },
+        None => "".to_string()
+    };
 
     let mut border_color = Color::White;
     if (x, y) == app.cursor {
@@ -96,13 +102,19 @@ fn make_cell(x: usize, y: usize, app: &App) -> Paragraph {
     Paragraph::new(text).block(block)
 }
 
-fn render_editor(f: &mut Frame, area: Rect) {
+fn render_editor(f: &mut Frame, area: Rect, app: &mut App) {
+    let mut border_color = Color::White;
+    if app.mode == Mode::Editor {
+        border_color = Color::LightRed;
+    }
     let title = Title::from(" Formula Editor ".bold().light_magenta());
     let block = Block::default()
         .title(title.alignment(Alignment::Center))
         .borders(Borders::ALL)
-        .border_set(border::THICK);
-    f.render_widget(block, area);
+        .border_set(border::THICK)
+        .border_style(border_color);
+    app.editor.set_block(block);
+    f.render_widget(app.editor.widget(), area);
 }
 
 fn render_display(f: &mut Frame, area: Rect) {
