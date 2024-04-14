@@ -56,13 +56,6 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 }
 
 fn render_table(f: &mut Frame, area: Rect, app: &App) {
-    // let title = Title::from(" Table ".bold().light_green());
-    // let block = Block::default()
-    //     .title(title.alignment(Alignment::Center))
-    //     .borders(Borders::ALL)
-    //     .border_set(border::THICK);
-    // f.render_widget(block, area);
-
     let grid_constraints: Vec<Constraint> = (0..GRID_WITH)
         .into_iter()
         .map(|_| Constraint::Min(1))
