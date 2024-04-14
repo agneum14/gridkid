@@ -1,12 +1,12 @@
 use std::fmt::Display;
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{bail, ensure, Result};
 
 pub const GRID_WITH: usize = 13;
 
 #[derive(Debug)]
 pub struct Cell {
-    ast: Option<Expr>,
+    pub ast: Option<Expr>,
     pub eval: Option<Result<Expr>>,
     pub src: String
 }
@@ -82,7 +82,7 @@ impl Runtime {
     }
 
     /// Get a mutable cell reference from an AddrPrim
-    fn cell_mut(&mut self, addr: &Expr) -> Result<&mut Cell> {
+    pub fn cell_mut(&mut self, addr: &Expr) -> Result<&mut Cell> {
         self.grid.cell_mut(addr)
     }
 

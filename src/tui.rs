@@ -7,7 +7,7 @@ use crossterm::{execute, terminal::*};
 use ratatui::{
     prelude::*,
     symbols::border,
-    widgets::{block::Title, Block, Borders, Cell, Paragraph},
+    widgets::{block::Title, Block, Borders, Paragraph},
 };
 
 use crate::{
@@ -89,7 +89,7 @@ fn make_cell<'a>(x: usize, y: usize, app: &App<'a>) -> Paragraph<'a> {
     let text = match &cell_data.eval {
         Some(v) => match v {
             Ok(v) => v.serialize(),
-            Err(e) => e.to_string()
+            Err(e) => e.to_string(),
         },
         None => "".to_string()
     };

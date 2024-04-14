@@ -1,5 +1,6 @@
 use std::{default, io};
 
+use anyhow::anyhow;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use lexer::lex;
 use model::{Expr, Runtime, GRID_WITH};
@@ -105,7 +106,7 @@ impl App<'_> {
                     }
                     Err(e) => {
                         ast = None;
-                        eval = Some(Err(e))
+                        eval = Some(Err(e));
                     }
                 }
                 self.runtime.set_cell_ast(addr, ast).unwrap();
@@ -121,6 +122,18 @@ impl App<'_> {
         }
 
         self.runtime.set_cell_src(addr, text).unwrap();
+
+        // evaluate all cells
+        for row in 0..GRID_WITH {
+            for col in 0..GRID_WITH {
+                let addr = &Expr::AddrPrim(row, col);
+                let cell = self.runtime.cell_mut(addr).unwrap();
+                if let Some(ast) = cell.ast.clone() {
+                    let eval = ast.eval(&self.runtime);
+                    self.runtime.set_cell_eval(addr, Some(eval)).unwrap();
+                }
+            }
+        }
     }
 
     fn exit(&mut self) {
