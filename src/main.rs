@@ -1,9 +1,7 @@
-use std::{default, io};
+use std::io;
 
-use anyhow::anyhow;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use lexer::lex;
-use model::{Expr, Runtime, GRID_WITH};
+use model::{Expr, Runtime, GRID_WIDTH};
 use parser::parse;
 use tui::ui;
 use tui_textarea::TextArea;
@@ -124,8 +122,8 @@ impl App<'_> {
         self.runtime.set_cell_src(addr, text).unwrap();
 
         // evaluate all cells
-        for row in 0..GRID_WITH {
-            for col in 0..GRID_WITH {
+        for row in 0..GRID_WIDTH {
+            for col in 0..GRID_WIDTH {
                 let addr = &Expr::AddrPrim(row, col);
                 let cell = self.runtime.cell_mut(addr).unwrap();
                 if let Some(ast) = cell.ast.clone() {
@@ -152,8 +150,8 @@ impl App<'_> {
     fn increment_cursor_x(&mut self) {
         let (mut x, y) = self.cursor;
         x += 1;
-        if x == GRID_WITH {
-            x = GRID_WITH - 1;
+        if x == GRID_WIDTH {
+            x = GRID_WIDTH - 1;
         }
         self.cursor = (x, y)
     }
@@ -161,8 +159,8 @@ impl App<'_> {
     fn increment_cursor_y(&mut self) {
         let (x, mut y) = self.cursor;
         y += 1;
-        if y == GRID_WITH {
-            y = GRID_WITH - 1;
+        if y == GRID_WIDTH {
+            y = GRID_WIDTH - 1;
         }
         self.cursor = (x, y)
     }

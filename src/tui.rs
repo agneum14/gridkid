@@ -11,7 +11,7 @@ use ratatui::{
 };
 
 use crate::{
-    model::{Expr, GRID_WITH},
+    model::{Cell, Expr, GRID_WIDTH},
     App, Mode,
 };
 
@@ -37,7 +37,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints(vec![
             Constraint::Length(1),
-            Constraint::Percentage(10),
+            Constraint::Percentage(11),
             Constraint::Min(1),
         ])
         .split(f.size());
@@ -50,13 +50,13 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     render_heading(f, vertical[0]);
 
     render_editor(f, horizontal[0], app);
-    render_display(f, horizontal[1]);
+    render_display(f, horizontal[1], app);
 
     render_table(f, vertical[2], app);
 }
 
 fn render_table(f: &mut Frame, area: Rect, app: &App) {
-    let grid_constraints: Vec<Constraint> = (0..GRID_WITH)
+    let grid_constraints: Vec<Constraint> = (0..GRID_WIDTH)
         .into_iter()
         .map(|_| Constraint::Min(1))
         .collect();
@@ -65,7 +65,7 @@ fn render_table(f: &mut Frame, area: Rect, app: &App) {
         .direction(Direction::Horizontal)
         .constraints(&grid_constraints)
         .split(area);
-    let row_layouts: Vec<Rc<[Rect]>> = (0..GRID_WITH)
+    let row_layouts: Vec<Rc<[Rect]>> = (0..GRID_WIDTH)
         .into_iter()
         .map(|i| {
             Layout::default()
@@ -75,24 +75,28 @@ fn render_table(f: &mut Frame, area: Rect, app: &App) {
         })
         .collect();
 
-    for row in 0..GRID_WITH {
-        for col in 0..GRID_WITH {
+    for row in 0..GRID_WIDTH {
+        for col in 0..GRID_WIDTH {
             let para = make_cell(row, col, app);
             f.render_widget(para, row_layouts[row][col]);
         }
     }
 }
 
-fn make_cell<'a>(x: usize, y: usize, app: &App<'a>) -> Paragraph<'a> {
-    let runtime = &app.runtime;
-    let cell_data = runtime.cell(&Expr::AddrPrim(x, y)).unwrap();
-    let text = match &cell_data.eval {
+fn eval_text(eval: &Option<anyhow::Result<Expr>>) -> String {
+    match eval {
         Some(v) => match v {
             Ok(v) => v.serialize(),
             Err(e) => e.to_string(),
         },
         None => "".to_string()
-    };
+    }
+}
+
+fn make_cell<'a>(x: usize, y: usize, app: &App<'a>) -> Paragraph<'a> {
+    let runtime = &app.runtime;
+    let cell_data = runtime.cell(&Expr::AddrPrim(x, y)).unwrap();
+    let text = eval_text(&cell_data.eval);
 
     let mut border_color = Color::White;
     if (x, y) == app.cursor {
@@ -114,16 +118,27 @@ fn render_editor(f: &mut Frame, area: Rect, app: &mut App) {
         .border_set(border::THICK)
         .border_style(border_color);
     app.editor.set_block(block);
+    if app.mode == Mode::Grid {
+        app.editor.select_all();
+        app.editor.cut();
+        let (x, y) = app.cursor;
+        let cell_data = app.runtime.cell(&Expr::AddrPrim(x, y)).unwrap();
+        app.editor.insert_str(&cell_data.src);
+    }
     f.render_widget(app.editor.widget(), area);
 }
 
-fn render_display(f: &mut Frame, area: Rect) {
+fn render_display(f: &mut Frame, area: Rect, app: &App) {
     let title = Title::from(" Display ".bold().light_blue());
     let block = Block::default()
         .title(title.alignment(Alignment::Center))
         .borders(Borders::ALL)
         .border_set(border::THICK);
-    f.render_widget(block, area);
+    let (x, y) = app.cursor;
+    let cell_data = app.runtime.cell(&Expr::AddrPrim(x, y)).unwrap();
+    let text = eval_text(&cell_data.eval);
+    let para = Paragraph::new(text).block(block);
+    f.render_widget(para, area);
 }
 
 fn render_heading(f: &mut Frame, area: Rect) {

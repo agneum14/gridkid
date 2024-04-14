@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use anyhow::{bail, ensure, Result};
 
-pub const GRID_WITH: usize = 13;
+pub const GRID_WIDTH: usize = 13;
 
 #[derive(Debug)]
 pub struct Cell {
