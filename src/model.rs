@@ -707,7 +707,7 @@ mod tests {
         let res = Expr::Sum(Box::new(x), Box::new(y)).eval(&runtime).unwrap();
 
         let sum = nums.iter().sum::<i64>();
-        assert_eq!(Expr::IntPrim(sum), res)
+        assert_eq!(Expr::FloatPrim(sum as f64), res)
     }
 
     /// sum([1, 2], [5, 3])
@@ -719,7 +719,7 @@ mod tests {
             .eval(&runtime)
             .unwrap();
         let sum = nums.iter().sum::<i64>();
-        assert_eq!(Expr::IntPrim(sum), res)
+        assert_eq!(Expr::FloatPrim(sum as f64), res)
     }
 
     /// !(3.3 > 3.2)
@@ -838,7 +838,7 @@ mod tests {
         let a = Expr::LValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(2)));
         let b = Expr::LValue(Box::new(Expr::IntPrim(2)), Box::new(Expr::IntPrim(4)));
         let res = Expr::Sum(Box::new(a), Box::new(b)).eval(&runtime).unwrap();
-        assert_eq!(Expr::IntPrim(21), res)
+        assert_eq!(Expr::FloatPrim(21.0), res)
     }
 
     #[test]
@@ -850,7 +850,7 @@ mod tests {
         let res = Expr::Max(Box::new(y), Box::new(x)).eval(&runtime).unwrap();
 
         let max = nums.iter().max().unwrap();
-        assert_eq!(Expr::IntPrim(*max), res)
+        assert_eq!(Expr::FloatPrim(*max as f64), res)
     }
 
     #[test]
@@ -862,7 +862,7 @@ mod tests {
         let res = Expr::Min(Box::new(y), Box::new(x)).eval(&runtime).unwrap();
 
         let min = nums.iter().min().unwrap();
-        assert_eq!(Expr::IntPrim(*min), res)
+        assert_eq!(Expr::FloatPrim(*min as f64), res)
     }
 
     #[test]
@@ -928,7 +928,7 @@ mod tests {
     fn sum2() {
         let (runtime, nums) = build_runtime_grid(0, 0, 2, 1);
         let sum = nums.iter().sum::<i64>();
-        let expected = Expr::IntPrim(sum + 1);
+        let expected = Expr::FloatPrim(sum as f64 + 1.0);
         let res = parse("1 + sum([0, 0], [2, 1])")
             .unwrap()
             .eval(&runtime)
