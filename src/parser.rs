@@ -343,7 +343,7 @@ fn diag(src: &str, found: &str, pos: usize) -> String {
     lexer_diag(&src, "token", found, pos, None)
 }
 
-pub fn parse(src: &str) -> Result<Expr> {
+pub fn parse_expr(src: &str) -> Result<Expr> {
     let tokens = lex(src)?;
     let mut parser = Parser {
         tokens,
@@ -351,6 +351,16 @@ pub fn parse(src: &str) -> Result<Expr> {
         src: src.to_string(),
     };
     parser.expression()
+}
+
+pub fn parse(src: &str) -> Result<Block> {
+    let tokens = lex(src)?;
+    let mut parser = Parser {
+        tokens,
+        i: 0,
+        src: src.to_string(),
+    };
+    parser.block()
 }
 
 #[cfg(test)]
@@ -362,7 +372,7 @@ mod tests {
 
     #[test]
     fn simple() {
-        let res = parse("1 + 7 * 4 + 10")
+        let res = parse_expr("1 + 7 * 4 + 10")
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
@@ -371,7 +381,7 @@ mod tests {
 
     #[test]
     fn exp() {
-        let res = parse("3 ** 4 ** 2")
+        let res = parse_expr("3 ** 4 ** 2")
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
@@ -380,7 +390,7 @@ mod tests {
 
     #[test]
     fn lvalue() {
-        let res = parse("[1 + 1, 7]")
+        let res = parse_expr("[1 + 1, 7]")
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
@@ -393,7 +403,7 @@ mod tests {
         runtime
             .set_cell(&Expr::AddrPrim(9, 5), &Expr::IntPrim(7))
             .unwrap();
-        let res = parse("#[(1 ** 1 + 7 * (2 - ~1)) / 3, (1 << 2 | 3) ** 2 / 9] == 7 == 7 > 1")
+        let res = parse_expr("#[(1 ** 1 + 7 * (2 - ~1)) / 3, (1 << 2 | 3) ** 2 / 9] == 7 == 7 > 1")
             .unwrap()
             .eval(&runtime)
             .unwrap();
@@ -402,7 +412,7 @@ mod tests {
 
     #[test]
     fn paren() {
-        let res = parse("2 * (2 + 7)")
+        let res = parse_expr("2 * (2 + 7)")
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
@@ -411,13 +421,13 @@ mod tests {
 
     #[test]
     fn unary_bool() {
-        let res = parse("!false").unwrap().eval(&Runtime::default()).unwrap();
+        let res = parse_expr("!false").unwrap().eval(&Runtime::default()).unwrap();
         assert_eq!(Expr::BoolPrim(true), res);
     }
 
     #[test]
     fn unary_int_paren() {
-        let res = parse("10 + ~(3)")
+        let res = parse_expr("10 + ~(3)")
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
@@ -426,13 +436,13 @@ mod tests {
 
     #[test]
     fn unary_minus_basic() {
-        let res = parse("1 - -2").unwrap().eval(&Runtime::default()).unwrap();
+        let res = parse_expr("1 - -2").unwrap().eval(&Runtime::default()).unwrap();
         assert_eq!(Expr::IntPrim(3), res);
     }
 
     #[test]
     fn unary_minus_complex() {
-        let res = parse("1 - -(-3 - 1)")
+        let res = parse_expr("1 - -(-3 - 1)")
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
@@ -441,7 +451,7 @@ mod tests {
 
     #[test]
     fn unary_minus_float() {
-        let res = parse("1 - -(-3.0 - 1)")
+        let res = parse_expr("1 - -(-3.0 - 1)")
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
@@ -450,7 +460,7 @@ mod tests {
 
     #[test]
     fn comparisons() {
-        let res = parse("1 <= 1 && 1 < 2 && 2 >= 2 && 2 > 1 && 1 != 2")
+        let res = parse_expr("1 <= 1 && 1 < 2 && 2 >= 2 && 2 > 1 && 1 != 2")
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
@@ -459,7 +469,7 @@ mod tests {
 
     #[test]
     fn invalid_end() {
-        let res = parse("2 + 2 + ");
+        let res = parse_expr("2 + 2 + ");
         let expected = indoc! {"
             2 + 2 + 
                     ^ <--- WRONG
@@ -473,7 +483,7 @@ mod tests {
 
     #[test]
     fn invalid_token() {
-        let res = parse("2 + 2 + ^ + 2");
+        let res = parse_expr("2 + 2 + ^ + 2");
         let expected = indoc! {"
             2 + 2 + ^ + 2
                     ^ <--- WRONG
@@ -487,7 +497,7 @@ mod tests {
 
     #[test]
     fn invalid_single_op() {
-        let res = parse("+");
+        let res = parse_expr("+");
         let expected = indoc! {"
             +
              ^ <--- WRONG
@@ -501,7 +511,7 @@ mod tests {
 
     #[test]
     fn arithmetic() {
-        let res = parse("(5 + 2) * 3 % 4")
+        let res = parse_expr("(5 + 2) * 3 % 4")
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
@@ -514,7 +524,7 @@ mod tests {
         runtime
             .set_cell(&Expr::AddrPrim(0, 0), &Expr::IntPrim(1))
             .unwrap();
-        let res = parse("#[0, 0] + 3").unwrap().eval(&runtime).unwrap();
+        let res = parse_expr("#[0, 0] + 3").unwrap().eval(&runtime).unwrap();
         assert_eq!(Expr::IntPrim(4), res);
     }
 
@@ -527,7 +537,7 @@ mod tests {
         runtime
             .set_cell(&Expr::AddrPrim(1, 1), &Expr::IntPrim(7))
             .unwrap();
-        let res = parse("#[1 - 1, 0] < #[1 * 1, 1]")
+        let res = parse_expr("#[1 - 1, 0] < #[1 * 1, 1]")
             .unwrap()
             .eval(&runtime)
             .unwrap();
@@ -537,7 +547,7 @@ mod tests {
     #[test]
     fn logic_cmp() {
         let runtime = Runtime::default();
-        let res = parse("5 > 3 && !(2 > 8)").unwrap().eval(&runtime).unwrap();
+        let res = parse_expr("5 > 3 && !(2 > 8)").unwrap().eval(&runtime).unwrap();
         assert_eq!(Expr::BoolPrim(true), res);
     }
 
@@ -546,7 +556,7 @@ mod tests {
     #[test]
     fn casting() {
         let runtime = Runtime::default();
-        let res = parse("float(10) / 4.0").unwrap().eval(&runtime).unwrap();
+        let res = parse_expr("float(10) / 4.0").unwrap().eval(&runtime).unwrap();
         assert_eq!(Expr::FloatPrim(2.5), res);
     }
 }

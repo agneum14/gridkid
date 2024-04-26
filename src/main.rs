@@ -2,7 +2,7 @@ use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use model::{Expr, Runtime, GRID_WIDTH};
-use parser::parse;
+use parser::{parse, parse_expr};
 use tui::ui;
 use tui_textarea::TextArea;
 
@@ -93,10 +93,10 @@ impl App<'_> {
         } else {
             if text != "" && text.chars().nth(0).unwrap() == '=' {
                 let text: String = text.chars().skip(1).collect();
-                let res = parse(&text);
+                let res = parse_expr(&text);
                 let eval;
                 let ast;
-
+                
                 match res {
                     Ok(v) => {
                         ast = Some(v);

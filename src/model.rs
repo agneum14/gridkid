@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use anyhow::{bail, ensure, Result};
 use derive_new::new;
@@ -10,6 +10,7 @@ pub struct Cell {
     pub ast: Option<Expr>,
     pub eval: Option<Result<Expr>>,
     pub src: String,
+    pub vars: HashMap<String, Expr>
 }
 
 impl Default for Cell {
@@ -18,6 +19,7 @@ impl Default for Cell {
             ast: None,
             eval: None,
             src: "".to_string(),
+            vars: HashMap::new()
         }
     }
 }
@@ -156,17 +158,32 @@ impl Runtime {
     }
 }
 
-#[derive(new)]
+#[derive(new, Debug)]
 pub struct Block {
     statements: Vec<Statement>,
     expr: Expr,
 }
 
+impl Block {
+    pub fn execute(&self, runtime: &mut Runtime, cell: &mut Cell) {
+        self.statements.iter().for_each(|s| s.execute(cell));
+    }
+}
+
+#[derive(Debug)]
 pub enum Statement {
     Assignment(Assignment),
 }
 
-#[derive(new)]
+impl Statement {
+    fn execute(&self, cell: &mut Cell) {
+        match self {
+            Self::Assignment(a) => cell.vars.insert(a.name.clone(), a.value.clone())
+        };
+    }
+}
+
+#[derive(new, Debug)]
 pub struct Assignment {
     name: String,
     value: Expr,
@@ -646,7 +663,7 @@ impl Expr {
 mod tests {
     use rand::Rng;
 
-    use crate::parser::parse;
+    use crate::parser::parse_expr;
 
     use super::*;
 
@@ -731,7 +748,7 @@ mod tests {
     #[test]
     fn sum_parsed() {
         let (runtime, nums) = build_runtime_grid(1, 2, 5, 3);
-        let res = parse("sum([1, 2], [5, 3])")
+        let res = parse_expr("sum([1, 2], [5, 3])")
             .unwrap()
             .eval(&runtime)
             .unwrap();
@@ -917,13 +934,13 @@ mod tests {
 
     #[test]
     fn invalid_addition() {
-        let x = parse("1 + true").unwrap().eval(&Runtime::default());
+        let x = parse_expr("1 + true").unwrap().eval(&Runtime::default());
         assert!(x.is_err())
     }
 
     #[test]
     fn invalid_greater() {
-        let x = parse("\"Ruby\" > \"nearly any other language (for me)\"")
+        let x = parse_expr("\"Ruby\" > \"nearly any other language (for me)\"")
             .unwrap()
             .eval(&Runtime::default()); // notice this results in a error
         assert!(x.is_err())
@@ -931,13 +948,13 @@ mod tests {
 
     #[test]
     fn invalid_lvalue() {
-        let x = parse("[1.5, 2]").unwrap().eval(&Runtime::default());
+        let x = parse_expr("[1.5, 2]").unwrap().eval(&Runtime::default());
         assert!(x.is_err())
     }
 
     #[test]
     fn invalid_shift_left() {
-        let x = parse("1 << 2.0").unwrap().eval(&Runtime::default());
+        let x = parse_expr("1 << 2.0").unwrap().eval(&Runtime::default());
         assert!(x.is_err());
     }
 
@@ -946,7 +963,7 @@ mod tests {
         let (runtime, nums) = build_runtime_grid(0, 0, 2, 1);
         let sum = nums.iter().sum::<i64>();
         let expected = Expr::FloatPrim(sum as f64 + 1.0);
-        let res = parse("1 + sum([0, 0], [2, 1])")
+        let res = parse_expr("1 + sum([0, 0], [2, 1])")
             .unwrap()
             .eval(&runtime)
             .unwrap();
@@ -955,7 +972,7 @@ mod tests {
 
     #[test]
     fn short_circuit_or() {
-        let res = parse("true || 7")
+        let res = parse_expr("true || 7")
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
@@ -964,7 +981,7 @@ mod tests {
 
     #[test]
     fn short_circuit_and() {
-        let res = parse("false && 7")
+        let res = parse_expr("false && 7")
             .unwrap()
             .eval(&Runtime::default())
             .unwrap();
