@@ -2,11 +2,13 @@ use anyhow::{bail, Result};
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum TokenKind {
+    Ident,
     LogicOr,
     LogicAnd,
     BitOr,
     BitXor,
     BitAnd,
+    Equals,
     EqualTo,
     NotEqualTo,
     LessThan,
@@ -194,8 +196,10 @@ impl Lexer {
                 }
                 '=' => {
                     self.cap();
-                    self.cap_targ('=')?;
-                    self.emit_token(TokenKind::EqualTo);
+                    match self.get() {
+                        Some('=') => self.cap_emit(TokenKind::EqualTo),
+                        _ => self.emit_token(TokenKind::Equals),
+                    }
                 }
                 '!' => {
                     self.cap();
@@ -258,13 +262,7 @@ impl Lexer {
                         "min" => self.emit_token(TokenKind::Min),
                         "mean" => self.emit_token(TokenKind::Mean),
                         "sum" => self.emit_token(TokenKind::Sum),
-                        _ => bail!(diag(
-                            &self.src,
-                            "identifier",
-                            &self.token_so_far,
-                            self.start,
-                            None
-                        )),
+                        _ => self.emit_token(TokenKind::Ident),
                     }
                 }
                 '"' => {
@@ -333,6 +331,8 @@ mod tests {
                     return false;
                 }
             }
+        } else {
+            return false;
         }
         true
     }
@@ -366,6 +366,8 @@ mod tests {
     fn string() {
         let tokens = lex("1 + 2 + \"hello world!!!\" + 3 + 4").unwrap();
         let expected = [
+            TokenKind::Int,
+            TokenKind::Add,
             TokenKind::Int,
             TokenKind::Add,
             TokenKind::Str,
@@ -426,20 +428,6 @@ mod tests {
     }
 
     #[test]
-    fn invalid_identifier() {
-        let tokens = lex("1 + 2 + WillyWonka + 3");
-        let expected = indoc! {"
-            1 + 2 + WillyWonka + 3
-                    ^ <--- WRONG
-            invalid identifier 'WillyWonka' at position 8"};
-
-        match tokens {
-            Err(e) => assert_eq!(expected, e.to_string()),
-            Ok(_) => assert!(tokens.is_err()),
-        }
-    }
-
-    #[test]
     fn invalid_digit() {
         let tokens = lex("1 + 1.a");
         let expected = indoc! {"
@@ -468,16 +456,16 @@ mod tests {
     }
 
     #[test]
-    fn invalid_targ() {
-        let tokens = lex("1 + 1 =a 2");
-        let expected = indoc! {"
-            1 + 1 =a 2
-                   ^ <--- WRONG
-            invalid char 'a' at position 7, expected '='"};
-
-        match tokens {
-            Err(e) => assert_eq!(expected, e.to_string()),
-            Ok(_) => assert!(tokens.is_err()),
-        }
+    fn assignment() {
+        let tokens = lex("waldo = 1 + 1").unwrap();
+        let expected = [
+            TokenKind::Ident,
+            TokenKind::Equals,
+            TokenKind::Int,
+            TokenKind::Add,
+            TokenKind::Int,
+        ]
+        .as_slice();
+        assert!(cmp_toks(expected, &tokens))
     }
 }

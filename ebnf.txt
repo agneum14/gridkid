@@ -1,5 +1,8 @@
-expr        = logic_or
+block       = { statement } expr
+statement   = assignment
+assignment  = IDENT "=" expr ";"
 
+expr        = logic_or
 logic_or    = logic_and { "||" logic_and }
 logic_and   = bit_or { "&&" bit_or }
 bit_or      = bit_xor { "|" bit_xor }
@@ -20,5 +23,5 @@ stat        = ( "max" | "min" | "mean" | "sum" ) "(" lvalue "," lvalue ")"
 rvalue      = "#" "[" expr "," expr "]"
 lvalue      = "[" expr "," expr "]"
 
-primary     = INT | FLOAT | BOOL | STR | float_cast | int_cast | stat | rvalue 
+primary     = INT | FLOAT | BOOL | STR | IDENT | float_cast | int_cast | stat | rvalue 
             | lvalue | paren_expr
