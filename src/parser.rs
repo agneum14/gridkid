@@ -97,6 +97,12 @@ impl Parser {
         false
     }
 
+    fn check_no_advance(&mut self, kind: &TokenKind) -> bool {
+        let res = self.check(kind);
+        self.i -= 1;
+        res
+    }
+
     fn demand(&mut self, kind: &TokenKind) -> Result<()> {
         if self.check(kind) {
             Ok(())
@@ -116,12 +122,13 @@ impl Parser {
             statements.push(statement.unwrap());
         }
 
+        self.i += 1;
         let expr = self.expression()?;
         Ok(Block::new(statements, expr))
     }
 
     fn statement(&mut self) -> Result<Option<Statement>> {
-        if self.check(&TokenKind::Ident) {
+        if self.check_no_advance(&TokenKind::Ident) {
             Ok(Some(Statement::Assignment(self.assignment()?)))
         } else {
             Ok(None)
@@ -133,6 +140,7 @@ impl Parser {
         let name = self.prev_token()?.src.to_owned();
         self.demand(&TokenKind::Equals)?;
         let value = self.expression()?;
+        self.demand(&TokenKind::Semicolon)?;
         Ok(Assignment::new(name, value))
     }
 
@@ -558,5 +566,12 @@ mod tests {
         let runtime = Runtime::default();
         let res = parse_expr("float(10) / 4.0").unwrap().eval(&runtime).unwrap();
         assert_eq!(Expr::FloatPrim(2.5), res);
+    }
+
+    #[test]
+    fn assignment() {
+        let res = parse("waldo = 5 + 5; turtle = 2; wonky = 7; 5");
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap().expr, Expr::IntPrim(5));
     }
 }

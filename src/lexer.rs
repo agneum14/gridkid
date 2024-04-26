@@ -3,6 +3,7 @@ use anyhow::{bail, Result};
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum TokenKind {
     Ident,
+    Semicolon,
     LogicOr,
     LogicAnd,
     BitOr,
@@ -169,6 +170,7 @@ impl Lexer {
         while self.i < self.src.len() {
             self.start = self.i;
             match self.src.get(self.i).unwrap() {
+                ';' => self.cap_emit(TokenKind::Semicolon),
                 '+' => self.cap_emit(TokenKind::Add),
                 '-' => self.cap_emit(TokenKind::Minus),
                 '/' => self.cap_emit(TokenKind::Div),

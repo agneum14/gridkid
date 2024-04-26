@@ -93,13 +93,14 @@ impl App<'_> {
         } else {
             if text != "" && text.chars().nth(0).unwrap() == '=' {
                 let text: String = text.chars().skip(1).collect();
-                let res = parse_expr(&text);
+                let res = parse(&text);
                 let eval;
                 let ast;
-                
+
                 match res {
                     Ok(v) => {
-                        ast = Some(v);
+                        v.execute(self.runtime.cell_mut(addr).unwrap());
+                        ast = Some(v.expr);
                         eval = Some(ast.clone().unwrap().eval(&self.runtime));
                     }
                     Err(e) => {

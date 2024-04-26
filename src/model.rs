@@ -161,11 +161,11 @@ impl Runtime {
 #[derive(new, Debug)]
 pub struct Block {
     statements: Vec<Statement>,
-    expr: Expr,
+    pub expr: Expr,
 }
 
 impl Block {
-    pub fn execute(&self, runtime: &mut Runtime, cell: &mut Cell) {
+    pub fn execute(&self, cell: &mut Cell) {
         self.statements.iter().for_each(|s| s.execute(cell));
     }
 }
