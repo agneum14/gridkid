@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{bail, ensure, Context, Result};
 use derive_new::new;
 
 pub const GRID_WIDTH: usize = 13;
@@ -10,7 +10,7 @@ pub struct Cell {
     pub ast: Option<Expr>,
     pub eval: Option<Result<Expr>>,
     pub src: String,
-    pub vars: HashMap<String, Expr>
+    pub vars: HashMap<String, Expr>,
 }
 
 impl Default for Cell {
@@ -19,7 +19,7 @@ impl Default for Cell {
             ast: None,
             eval: None,
             src: "".to_string(),
-            vars: HashMap::new()
+            vars: HashMap::new(),
         }
     }
 }
@@ -91,7 +91,7 @@ impl Runtime {
 
     /// Set a cell from an AddrPrim and AST
     pub fn set_cell(&mut self, addr: &Expr, ast: &Expr) -> Result<()> {
-        let eval = ast.eval(self);
+        let eval = ast.eval(self, addr);
         let cell = self.cell_mut(addr)?;
         cell.ast = Some(ast.clone());
         cell.eval = Some(eval);
@@ -178,7 +178,7 @@ pub enum Statement {
 impl Statement {
     fn execute(&self, cell: &mut Cell) {
         match self {
-            Self::Assignment(a) => cell.vars.insert(a.name.clone(), a.value.clone())
+            Self::Assignment(a) => cell.vars.insert(a.name.clone(), a.value.clone()),
         };
     }
 }
@@ -241,6 +241,8 @@ pub enum Expr {
     Min(Box<Expr>, Box<Expr>),
     Mean(Box<Expr>, Box<Expr>),
     Sum(Box<Expr>, Box<Expr>),
+
+    Variable(String),
 }
 
 impl Display for Expr {
@@ -281,6 +283,7 @@ impl Display for Expr {
             Self::Min(_, _) => write!(f, "Min"),
             Self::Mean(_, _) => write!(f, "Mean"),
             Self::Sum(_, _) => write!(f, "Sum"),
+            Self::Variable(v) => write!(f, "Variable({})", v),
         }
     }
 }
@@ -323,8 +326,16 @@ impl Expr {
         }
     }
 
+    pub fn eval_cords(&self, runtime: &Runtime, addr: (i64, i64)) -> Result<Expr> {
+        let (x, y) = addr;
+        self.eval(
+            runtime,
+            &Expr::new_addr_prim(&Expr::IntPrim(x), &Expr::IntPrim(y))?,
+        )
+    }
+
     /// Evaluate an Expr, recursing through the AST
-    pub fn eval(&self, runtime: &Runtime) -> Result<Expr> {
+    pub fn eval(&self, runtime: &Runtime, addr: &Expr) -> Result<Expr> {
         match self {
             Self::IntPrim(_)
             | Self::FloatPrim(_)
@@ -332,7 +343,7 @@ impl Expr {
             | Self::StringPrim(_)
             | Self::AddrPrim(_, _) => Ok(self.clone()),
             Self::Add(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av + bv)),
@@ -341,7 +352,7 @@ impl Expr {
                 }
             }
             Self::Sub(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av - bv)),
@@ -350,7 +361,7 @@ impl Expr {
                 }
             }
             Self::Mult(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av * bv)),
@@ -359,7 +370,7 @@ impl Expr {
                 }
             }
             Self::Div(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av / bv)),
@@ -368,14 +379,14 @@ impl Expr {
                 }
             }
             Self::Mod(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av % bv)),
                     _ => bail!("cannot mod types {} and {}", a, b),
                 }
             }
             Self::Exp(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::IntPrim(av.pow(*bv as u32))),
                     (Expr::IntPrim(av), Expr::FloatPrim(bv)) => {
@@ -389,7 +400,7 @@ impl Expr {
                 }
             }
             Self::Neg(a) => {
-                let a = a.eval(runtime)?;
+                let a = a.eval(runtime, addr)?;
                 match a {
                     Expr::IntPrim(av) => Ok(Expr::IntPrim(-1 * av)),
                     Expr::FloatPrim(av) => Ok(Expr::FloatPrim(-1.0 * av)),
@@ -397,13 +408,13 @@ impl Expr {
                 }
             }
             Self::LogicAnd(a, b) => {
-                let a = &a.eval(runtime)?;
+                let a = &a.eval(runtime, addr)?;
                 if let Expr::BoolPrim(av) = *a {
                     if !av {
                         return Ok(Expr::BoolPrim(false));
                     }
 
-                    let b = &b.eval(runtime)?;
+                    let b = &b.eval(runtime, addr)?;
                     if let Expr::BoolPrim(bv) = *b {
                         return Ok(Expr::BoolPrim(av && bv));
                     }
@@ -412,13 +423,13 @@ impl Expr {
                 bail!("cannot logic and types {} and {}", a, b);
             }
             Self::LogicOr(a, b) => {
-                let a = &a.eval(runtime)?;
+                let a = &a.eval(runtime, addr)?;
                 if let Expr::BoolPrim(av) = *a {
                     if av {
                         return Ok(Expr::BoolPrim(true));
                     }
 
-                    let b = &b.eval(runtime)?;
+                    let b = &b.eval(runtime, addr)?;
                     if let Expr::BoolPrim(bv) = *b {
                         return Ok(Expr::BoolPrim(av || bv));
                     }
@@ -427,14 +438,14 @@ impl Expr {
                 bail!("cannot logic or types {} and {}", a, b);
             }
             Self::LogicNot(a) => {
-                let a = &a.eval(runtime)?;
+                let a = &a.eval(runtime, addr)?;
                 match a {
                     Expr::BoolPrim(av) => Ok(Expr::BoolPrim(!av)),
                     _ => bail!("cannot logic not type {}", a),
                 }
             }
             Self::RValue(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let addr = Self::new_addr_prim(a, b)?;
                 let cell = runtime.cell(&addr)?;
                 let (x, y) = (a.inner_int_prim()?, b.inner_int_prim()?);
@@ -448,53 +459,53 @@ impl Expr {
                 Ok(eval)
             }
             Self::LValue(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 Self::new_addr_prim(a, b)
             }
             Self::BitwiseAnd(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Self::IntPrim(av & bv)),
                     _ => bail!("cannot bitwise and types {} and {}", a, b),
                 }
             }
             Self::BitwiseOr(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Self::IntPrim(av | bv)),
                     _ => bail!("cannot bitwise or types {} and {}", a, b),
                 }
             }
             Self::BitwiseXor(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Self::IntPrim(av ^ bv)),
                     _ => bail!("cannot bitwise xor types {} and {}", a, b),
                 }
             }
             Self::BitwiseNot(a) => {
-                let a = &a.eval(runtime)?;
+                let a = &a.eval(runtime, addr)?;
                 match a {
                     Expr::IntPrim(av) => Ok(Expr::IntPrim(!av)),
                     _ => bail!("cannot bitwise not type {}", a),
                 }
             }
             Self::BitwiseLeftShift(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Self::IntPrim(av << bv)),
                     _ => bail!("cannot left shift types {} and {}", a, b),
                 }
             }
             Self::BitwiseRightShift(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Self::IntPrim(av >> bv)),
                     _ => bail!("cannot right shift types {} and {}", a, b),
                 }
             }
             Self::CastToInt(a) => {
-                let a = &a.eval(runtime)?;
+                let a = &a.eval(runtime, addr)?;
                 match a {
                     Expr::IntPrim(_) => Ok(a.clone()),
                     Expr::FloatPrim(v) => Ok(Expr::IntPrim(*v as i64)),
@@ -502,7 +513,7 @@ impl Expr {
                 }
             }
             Self::CastToFloat(a) => {
-                let a = &a.eval(runtime)?;
+                let a = &a.eval(runtime, addr)?;
                 match a {
                     Expr::IntPrim(v) => Ok(Expr::FloatPrim(*v as f64)),
                     Expr::FloatPrim(_) => Ok(a.clone()),
@@ -510,7 +521,7 @@ impl Expr {
                 }
             }
             Self::Equals(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av == bv)),
@@ -520,7 +531,7 @@ impl Expr {
                 }
             }
             Self::NotEquals(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av != bv)),
@@ -530,7 +541,7 @@ impl Expr {
                 }
             }
             Self::LessThan(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av < bv)),
@@ -539,7 +550,7 @@ impl Expr {
                 }
             }
             Self::LessThanOrEquals(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av <= bv)),
@@ -548,7 +559,7 @@ impl Expr {
                 }
             }
             Self::GreaterThan(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av > bv)),
@@ -557,7 +568,7 @@ impl Expr {
                 }
             }
             Self::GreaterThanOrEquals(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let (a, b) = &Self::coerce(a, b);
                 match (a, b) {
                     (Expr::IntPrim(av), Expr::IntPrim(bv)) => Ok(Expr::BoolPrim(av >= bv)),
@@ -566,7 +577,7 @@ impl Expr {
                 }
             }
             Self::Max(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let vals: Vec<f64> = runtime
                     .eval_range(a, b)?
                     .iter()
@@ -581,7 +592,7 @@ impl Expr {
                 Ok(Expr::FloatPrim(max))
             }
             Self::Min(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let vals: Vec<f64> = runtime
                     .eval_range(a, b)?
                     .iter()
@@ -596,7 +607,7 @@ impl Expr {
                 Ok(Expr::FloatPrim(min))
             }
             Self::Mean(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let evals = runtime.eval_range(a, b)?;
                 let mean = evals
                     .iter()
@@ -606,13 +617,21 @@ impl Expr {
                 Ok(Self::FloatPrim(mean))
             }
             Self::Sum(a, b) => {
-                let (a, b) = &(a.eval(runtime)?, b.eval(runtime)?);
+                let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let evals = runtime.eval_range(a, b)?;
                 let sum = evals
                     .iter()
                     .map(|x| x.inner_float_prim().unwrap())
                     .sum::<f64>();
                 Ok(Expr::FloatPrim(sum))
+            }
+            Self::Variable(v) => {
+                let cell = runtime.cell(&addr)?;
+                let ast = cell
+                    .vars
+                    .get(v)
+                    .context("accessed uninitialized variable \"{}\"")?;
+                todo!()
             }
         }
     }
@@ -655,6 +674,7 @@ impl Expr {
             Self::Min(a, b) => format!("min({}, {})", a.serialize(), b.serialize()),
             Self::Mean(a, b) => format!("mean({}, {})", a.serialize(), b.serialize()),
             Self::Sum(a, b) => format!("sum({}, {})", a.serialize(), b.serialize()),
+            Self::Variable(v) => format!("Variable({})", v),
         }
     }
 }
@@ -692,7 +712,7 @@ mod tests {
         let x = Expr::Mult(Box::new(Expr::IntPrim(7)), Box::new(Expr::IntPrim(4)));
         let x = Expr::Add(Box::new(x), Box::new(Expr::IntPrim(3)));
         let x = Expr::Mod(Box::new(x), Box::new(Expr::IntPrim(12)));
-        let x = x.eval(&Runtime::default()).unwrap();
+        let x = x.eval_cords(&Runtime::default(), (0, 0)).unwrap();
         assert_eq!(Expr::IntPrim(7), x);
     }
 
@@ -708,7 +728,7 @@ mod tests {
         let x = Expr::Add(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(1)));
         let x = Expr::RValue(Box::new(x), Box::new(Expr::IntPrim(4)));
         let x = Expr::BitwiseLeftShift(Box::new(x), Box::new(Expr::IntPrim(3)));
-        let x = x.eval(&runtime).unwrap();
+        let x = x.eval_cords(&runtime, (0, 0)).unwrap();
         assert_eq!(Expr::IntPrim(40), x)
     }
 
@@ -727,7 +747,7 @@ mod tests {
         let x = Expr::RValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(0)));
         let y = Expr::RValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(1)));
         let res = Expr::LessThan(Box::new(x), Box::new(y));
-        let res = res.eval(&runtime).unwrap();
+        let res = res.eval_cords(&runtime, (0, 0)).unwrap();
         assert_eq!(Expr::BoolPrim(true), res)
     }
 
@@ -738,7 +758,9 @@ mod tests {
 
         let x = Expr::LValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(2)));
         let y = Expr::LValue(Box::new(Expr::IntPrim(5)), Box::new(Expr::IntPrim(3)));
-        let res = Expr::Sum(Box::new(x), Box::new(y)).eval(&runtime).unwrap();
+        let res = Expr::Sum(Box::new(x), Box::new(y))
+            .eval_cords(&runtime, (0, 0))
+            .unwrap();
 
         let sum = nums.iter().sum::<i64>();
         assert_eq!(Expr::FloatPrim(sum as f64), res)
@@ -750,7 +772,7 @@ mod tests {
         let (runtime, nums) = build_runtime_grid(1, 2, 5, 3);
         let res = parse_expr("sum([1, 2], [5, 3])")
             .unwrap()
-            .eval(&runtime)
+            .eval_cords(&runtime, (0, 0))
             .unwrap();
         let sum = nums.iter().sum::<i64>();
         assert_eq!(Expr::FloatPrim(sum as f64), res)
@@ -764,7 +786,7 @@ mod tests {
             Box::new(Expr::FloatPrim(3.2)),
         );
         let x = Expr::LogicNot(Box::new(x));
-        let x = x.eval(&Runtime::default()).unwrap();
+        let x = x.eval_cords(&Runtime::default(), (0, 0)).unwrap();
         assert_eq!(Expr::BoolPrim(false), x);
     }
 
@@ -773,7 +795,7 @@ mod tests {
     fn casting() {
         let x = Expr::CastToFloat(Box::new(Expr::IntPrim(7)));
         let x = Expr::Div(Box::new(x), Box::new(Expr::IntPrim(2)));
-        let x = x.eval(&Runtime::default()).unwrap();
+        let x = x.eval_cords(&Runtime::default(), (0, 0)).unwrap();
         assert_eq!(Expr::FloatPrim(3.5), x);
     }
 
@@ -871,7 +893,9 @@ mod tests {
 
         let a = Expr::LValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(2)));
         let b = Expr::LValue(Box::new(Expr::IntPrim(2)), Box::new(Expr::IntPrim(4)));
-        let res = Expr::Sum(Box::new(a), Box::new(b)).eval(&runtime).unwrap();
+        let res = Expr::Sum(Box::new(a), Box::new(b))
+            .eval_cords(&runtime, (0, 0))
+            .unwrap();
         assert_eq!(Expr::FloatPrim(21.0), res)
     }
 
@@ -881,7 +905,9 @@ mod tests {
 
         let x = Expr::LValue(Box::new(Expr::IntPrim(50)), Box::new(Expr::IntPrim(90)));
         let y = Expr::LValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(35)));
-        let res = Expr::Max(Box::new(y), Box::new(x)).eval(&runtime).unwrap();
+        let res = Expr::Max(Box::new(y), Box::new(x))
+            .eval_cords(&runtime, (0, 0))
+            .unwrap();
 
         let max = nums.iter().max().unwrap();
         assert_eq!(Expr::FloatPrim(*max as f64), res)
@@ -893,7 +919,9 @@ mod tests {
 
         let x = Expr::LValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(99)));
         let y = Expr::LValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(99)));
-        let res = Expr::Min(Box::new(y), Box::new(x)).eval(&runtime).unwrap();
+        let res = Expr::Min(Box::new(y), Box::new(x))
+            .eval_cords(&runtime, (0, 0))
+            .unwrap();
 
         let min = nums.iter().min().unwrap();
         assert_eq!(Expr::FloatPrim(*min as f64), res)
@@ -905,7 +933,9 @@ mod tests {
 
         let x = Expr::LValue(Box::new(Expr::IntPrim(7)), Box::new(Expr::IntPrim(24)));
         let y = Expr::LValue(Box::new(Expr::IntPrim(2)), Box::new(Expr::IntPrim(15)));
-        let res = Expr::Mean(Box::new(y), Box::new(x)).eval(&runtime).unwrap();
+        let res = Expr::Mean(Box::new(y), Box::new(x))
+            .eval_cords(&runtime, (0, 0))
+            .unwrap();
 
         let mean = nums.iter().sum::<i64>() as f64 / nums.len() as f64;
         assert_eq!(Expr::FloatPrim(mean), res)
@@ -914,27 +944,29 @@ mod tests {
     #[test]
     fn access_invalid_range() {
         let x = Expr::LValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(100)));
-        let x = x.eval(&Runtime::default());
+        let x = x.eval_cords(&Runtime::default(), (0, 0));
         assert!(x.is_err());
     }
 
     #[test]
     fn access_empty_cell() {
         let x = Expr::RValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(1)));
-        let x = x.eval(&Runtime::default());
+        let x = x.eval_cords(&Runtime::default(), (0, 0));
         assert!(x.is_err());
     }
 
     #[test]
     fn invalid_prims() {
         let x = Expr::Add(Box::new(Expr::IntPrim(5)), Box::new(Expr::BoolPrim(true)));
-        let x = x.eval(&Runtime::default());
+        let x = x.eval_cords(&Runtime::default(), (0, 0));
         assert!(x.is_err())
     }
 
     #[test]
     fn invalid_addition() {
-        let x = parse_expr("1 + true").unwrap().eval(&Runtime::default());
+        let x = parse_expr("1 + true")
+            .unwrap()
+            .eval_cords(&Runtime::default(), (0, 0));
         assert!(x.is_err())
     }
 
@@ -942,19 +974,23 @@ mod tests {
     fn invalid_greater() {
         let x = parse_expr("\"Ruby\" > \"nearly any other language (for me)\"")
             .unwrap()
-            .eval(&Runtime::default()); // notice this results in a error
+            .eval_cords(&Runtime::default(), (0, 0)); // notice this results in a error
         assert!(x.is_err())
     }
 
     #[test]
     fn invalid_lvalue() {
-        let x = parse_expr("[1.5, 2]").unwrap().eval(&Runtime::default());
+        let x = parse_expr("[1.5, 2]")
+            .unwrap()
+            .eval_cords(&Runtime::default(), (0, 0));
         assert!(x.is_err())
     }
 
     #[test]
     fn invalid_shift_left() {
-        let x = parse_expr("1 << 2.0").unwrap().eval(&Runtime::default());
+        let x = parse_expr("1 << 2.0")
+            .unwrap()
+            .eval_cords(&Runtime::default(), (0, 0));
         assert!(x.is_err());
     }
 
@@ -965,7 +1001,7 @@ mod tests {
         let expected = Expr::FloatPrim(sum as f64 + 1.0);
         let res = parse_expr("1 + sum([0, 0], [2, 1])")
             .unwrap()
-            .eval(&runtime)
+            .eval_cords(&runtime, (0, 0))
             .unwrap();
         assert_eq!(expected, res)
     }
@@ -974,7 +1010,7 @@ mod tests {
     fn short_circuit_or() {
         let res = parse_expr("true || 7")
             .unwrap()
-            .eval(&Runtime::default())
+            .eval_cords(&Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::BoolPrim(true), res);
     }
@@ -983,7 +1019,7 @@ mod tests {
     fn short_circuit_and() {
         let res = parse_expr("false && 7")
             .unwrap()
-            .eval(&Runtime::default())
+            .eval_cords(&Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::BoolPrim(false), res);
     }

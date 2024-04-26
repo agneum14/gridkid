@@ -101,7 +101,7 @@ impl App<'_> {
                     Ok(v) => {
                         v.execute(self.runtime.cell_mut(addr).unwrap());
                         ast = Some(v.expr);
-                        eval = Some(ast.clone().unwrap().eval(&self.runtime));
+                        eval = Some(ast.clone().unwrap().eval(&self.runtime, addr));
                     }
                     Err(e) => {
                         ast = None;
@@ -128,7 +128,7 @@ impl App<'_> {
                 let addr = &Expr::AddrPrim(row, col);
                 let cell = self.runtime.cell_mut(addr).unwrap();
                 if let Some(ast) = cell.ast.clone() {
-                    let eval = ast.eval(&self.runtime);
+                    let eval = ast.eval(&self.runtime, addr);
                     self.runtime.set_cell_eval(addr, Some(eval)).unwrap();
                 }
             }
