@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use anyhow::{bail, ensure, Result};
+use derive_new::new;
 
 pub const GRID_WIDTH: usize = 13;
 
@@ -155,6 +156,22 @@ impl Runtime {
     }
 }
 
+#[derive(new)]
+pub struct Block {
+    statements: Vec<Statement>,
+    expr: Expr,
+}
+
+pub enum Statement {
+    Assignment(Assignment),
+}
+
+#[derive(new)]
+pub struct Assignment {
+    name: String,
+    value: Expr,
+}
+
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
     // primitives
@@ -259,7 +276,7 @@ impl Expr {
             _ => bail!("{} is not a FloatPrim", self),
         }
     }
- 
+
     /// Get the inner value of an IntPrim
     fn inner_int_prim(&self) -> Result<i64> {
         match self {

@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 
 use crate::{
     lexer::{diag as lexer_diag, lex, Token, TokenKind},
-    model::Expr,
+    model::{Assignment, Block, Expr, Statement},
 };
 
 struct Parser {
@@ -104,6 +104,36 @@ impl Parser {
             let token = self.prev_token()?;
             bail!(diag(self.src.as_str(), token.src.as_str(), token.start))
         }
+    }
+
+    fn block(&mut self) -> Result<Block> {
+        let mut statements: Vec<Statement> = Vec::new();
+        loop {
+            let statement = self.statement()?;
+            if statement.is_none() {
+                break;
+            }
+            statements.push(statement.unwrap());
+        }
+
+        let expr = self.expression()?;
+        Ok(Block::new(statements, expr))
+    }
+
+    fn statement(&mut self) -> Result<Option<Statement>> {
+        if self.check(&TokenKind::Ident) {
+            Ok(Some(Statement::Assignment(self.assignment()?)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn assignment(&mut self) -> Result<Assignment> {
+        self.demand(&TokenKind::Ident)?;
+        let name = self.prev_token()?.src.to_owned();
+        self.demand(&TokenKind::Equals)?;
+        let value = self.expression()?;
+        Ok(Assignment::new(name, value))
     }
 
     fn expression(&mut self) -> Result<Expr> {
