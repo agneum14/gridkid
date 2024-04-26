@@ -156,6 +156,17 @@ impl Runtime {
         }
         Ok(evals)
     }
+
+    fn set_variable(&mut self, statement: &Statement, addr: &Expr) -> Result<()> {
+        match &statement {
+            Statement::Assignment(a) => {
+                let eval = a.value.eval(self, addr)?;
+                let cell = self.cell_mut(addr)?;
+                cell.vars.insert(a.name.clone(), eval);
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(new, Debug)]
@@ -165,8 +176,11 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn execute(&self, cell: &mut Cell) {
-        self.statements.iter().for_each(|s| s.execute(cell));
+    pub fn execute(&self, runtime: &mut Runtime, addr: &Expr) -> Result<()> {
+        for statement in &self.statements {
+            statement.execute(runtime, addr)?;
+        }
+        Ok(())
     }
 }
 
@@ -176,10 +190,11 @@ pub enum Statement {
 }
 
 impl Statement {
-    fn execute(&self, cell: &mut Cell) {
+    fn execute(&self, runtime: &mut Runtime, addr: &Expr) -> Result<()> {
         match self {
-            Self::Assignment(a) => cell.vars.insert(a.name.clone(), a.value.clone()),
+            Self::Assignment(_) => runtime.set_variable(self, addr)?
         };
+        Ok(())
     }
 }
 
@@ -627,11 +642,10 @@ impl Expr {
             }
             Self::Variable(v) => {
                 let cell = runtime.cell(&addr)?;
-                let ast = cell
+                Ok(cell
                     .vars
                     .get(v)
-                    .context("accessed uninitialized variable \"{}\"")?;
-                todo!()
+                    .context("accessed uninitialized variable \"{}\"")?.clone())
             }
         }
     }

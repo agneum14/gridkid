@@ -316,6 +316,10 @@ impl Parser {
                 let inner: String = inner.chars().skip(1).take(len - 2).collect();
                 Ok(Expr::StringPrim(inner))
             }
+            TokenKind::Ident => {
+                let inner = token.src.clone();
+                Ok(Expr::Variable(inner))
+            }
             TokenKind::FloatCast | TokenKind::IntCast => {
                 let cast = &token.kind.clone();
                 let expr = self.paren_expression()?;
@@ -585,8 +589,13 @@ mod tests {
 
     #[test]
     fn assignment() {
-        let res = parse("waldo = 5 + 5; turtle = 2; wonky = 7; 5");
-        assert!(res.is_ok());
-        assert_eq!(res.unwrap().expr, Expr::IntPrim(5));
+        let block = parse("waldo = 5 + 5; turtle = 2; 1 + waldo + turtle");
+        assert!(block.is_ok());
+        let block = block.unwrap();
+        let mut runtime = Runtime::default();
+        let addr = &Expr::AddrPrim(0, 0);
+        block.execute(&mut runtime, addr).unwrap();
+        let actual = block.expr.eval(&runtime, addr).unwrap();
+        assert_eq!(Expr::IntPrim(13), actual)
     }
 }

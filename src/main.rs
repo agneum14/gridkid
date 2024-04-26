@@ -99,7 +99,7 @@ impl App<'_> {
 
                 match res {
                     Ok(v) => {
-                        v.execute(self.runtime.cell_mut(addr).unwrap());
+                        v.execute(&mut self.runtime, addr);
                         ast = Some(v.expr);
                         eval = Some(ast.clone().unwrap().eval(&self.runtime, addr));
                     }
