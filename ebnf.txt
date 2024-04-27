@@ -1,6 +1,6 @@
 block       = { statement }+
-statement   = assignment | if_else | expr
-assignment  = IDENT "=" expr ";"
+statement   = assignment | if_else | for_each | expr
+assignment  = "let" IDENT "=" expr ";"
 if_else = "if" expr "{" block "}" "else" "{" block "}"
 for_each = "for" IDENT "in" expr ".." expr "{" block "}"
 
