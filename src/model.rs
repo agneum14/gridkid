@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use anyhow::{bail, ensure, Context, Result};
 
-pub const GRID_WIDTH: usize = 13;
+pub const GRID_WIDTH: usize = 11;
 
 #[derive(Debug)]
 pub struct Cell {

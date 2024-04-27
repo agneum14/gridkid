@@ -37,7 +37,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints(vec![
             Constraint::Length(1),
-            Constraint::Percentage(11),
+            Constraint::Percentage(25),
             Constraint::Min(1),
         ])
         .split(f.size());
