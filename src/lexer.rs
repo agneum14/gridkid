@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum TokenKind {
+    Let,
     DotDot,
     For,
     In,
@@ -282,6 +283,7 @@ impl Lexer {
                         "else" => self.emit_token(TokenKind::Else),
                         "for" => self.emit_token(TokenKind::For),
                         "in" => self.emit_token(TokenKind::In),
+                        "let" => self.emit_token(TokenKind::Let),
                         _ => self.emit_token(TokenKind::Ident),
                     }
                 }

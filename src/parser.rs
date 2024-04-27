@@ -130,7 +130,7 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Expr> {
-        if self.check_no_advance(&TokenKind::Ident) {
+        if self.check_no_advance(&TokenKind::Let) {
             self.assignment()
         } else if self.check_no_advance(&TokenKind::If) {
             self.if_else()
@@ -142,6 +142,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> Result<Expr> {
+        self.demand(&TokenKind::Let)?;
         self.demand(&TokenKind::Ident)?;
         let name = self.prev_token()?.src.to_owned();
         self.demand(&TokenKind::Equals)?;
@@ -627,14 +628,14 @@ mod tests {
 
     #[test]
     fn assignment() {
-        let block = parse("waldo = 5 + 5; turtle = 2; 1 + waldo + turtle");
+        let block = parse("let waldo = 5 + 5; let turtle = 2; waldo + turtle");
         assert!(block.is_ok());
         let block = block.unwrap();
         let mut runtime = Runtime::default();
         let addr = &Expr::AddrPrim(0, 0);
         let actual = block.eval(&mut runtime, addr);
         let actual = actual.unwrap();
-        assert_eq!(Expr::IntPrim(13), actual)
+        assert_eq!(Expr::IntPrim(12), actual)
     }
 
     #[test]
@@ -680,8 +681,8 @@ mod tests {
         runtime
             .set_cell(&Expr::AddrPrim(4, 3), &Expr::IntPrim(8))
             .unwrap();
-        let expr = parse("s = 0; for v in [4,0] .. [4,3] { s = s + v; } 1 + s").unwrap();
+        let expr = parse("let s = 0; for v in [4,0] .. [4,3] { let s = s + v; } s").unwrap();
         let actual = expr.eval(&mut runtime, &Expr::AddrPrim(0, 0)).unwrap(); 
-        assert_eq!(Expr::FloatPrim(16.0), actual);
+        assert_eq!(Expr::FloatPrim(15.0), actual);
     }
 }
