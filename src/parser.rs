@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 
 use crate::{
     lexer::{diag as lexer_diag, lex, Token, TokenKind},
-    model::{Assignment, Block, Expr, Statement},
+    model::Expr,
 };
 
 struct Parser {
@@ -112,36 +112,31 @@ impl Parser {
         }
     }
 
-    fn block(&mut self) -> Result<Block> {
-        let mut statements: Vec<Statement> = Vec::new();
-        loop {
-            let statement = self.statement()?;
-            if statement.is_none() {
-                break;
-            }
-            statements.push(statement.unwrap());
+    fn block(&mut self) -> Result<Expr> {
+        let mut statements: Vec<Expr> = Vec::new();
+        while self.i < self.tokens.len() {
+            statements.push(self.statement()?);
         }
-
-        self.i += 1;
-        let expr = self.expression()?;
-        Ok(Block::new(statements, expr))
+        Ok(Expr::Block(statements))
     }
 
-    fn statement(&mut self) -> Result<Option<Statement>> {
+    fn statement(&mut self) -> Result<Expr> {
         if self.check_no_advance(&TokenKind::Ident) {
-            Ok(Some(Statement::Assignment(self.assignment()?)))
+            self.assignment()
         } else {
-            Ok(None)
+            self.i += 1;
+            self.expression()
         }
     }
 
-    fn assignment(&mut self) -> Result<Assignment> {
+    fn assignment(&mut self) -> Result<Expr> {
         self.demand(&TokenKind::Ident)?;
         let name = self.prev_token()?.src.to_owned();
         self.demand(&TokenKind::Equals)?;
         let value = self.expression()?;
+        println!("name: {}, value: {:?}", name, value);
         self.demand(&TokenKind::Semicolon)?;
-        Ok(Assignment::new(name, value))
+        Ok(Expr::Assignment(name, Box::new(value)))
     }
 
     fn expression(&mut self) -> Result<Expr> {
@@ -365,7 +360,7 @@ pub fn parse_expr(src: &str) -> Result<Expr> {
     parser.expression()
 }
 
-pub fn parse(src: &str) -> Result<Block> {
+pub fn parse(src: &str) -> Result<Expr> {
     let tokens = lex(src)?;
     let mut parser = Parser {
         tokens,
@@ -386,7 +381,7 @@ mod tests {
     fn simple() {
         let res = parse_expr("1 + 7 * 4 + 10")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::IntPrim(39), res);
     }
@@ -395,7 +390,7 @@ mod tests {
     fn exp() {
         let res = parse_expr("3 ** 4 ** 2")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::IntPrim(43046721), res);
     }
@@ -404,7 +399,7 @@ mod tests {
     fn lvalue() {
         let res = parse_expr("[1 + 1, 7]")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::AddrPrim(2, 7), res)
     }
@@ -417,7 +412,7 @@ mod tests {
             .unwrap();
         let res = parse_expr("#[(1 ** 1 + 7 * (2 - ~1)) / 3, (1 << 2 | 3) ** 2 / 9] == 7 == 7 > 1")
             .unwrap()
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
         assert_eq!(Expr::BoolPrim(true), res);
     }
@@ -426,7 +421,7 @@ mod tests {
     fn paren() {
         let res = parse_expr("2 * (2 + 7)")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::IntPrim(18), res)
     }
@@ -435,7 +430,7 @@ mod tests {
     fn unary_bool() {
         let res = parse_expr("!false")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::BoolPrim(true), res);
     }
@@ -444,7 +439,7 @@ mod tests {
     fn unary_int_paren() {
         let res = parse_expr("10 + ~(3)")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::IntPrim(6), res);
     }
@@ -453,7 +448,7 @@ mod tests {
     fn unary_minus_basic() {
         let res = parse_expr("1 - -2")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::IntPrim(3), res);
     }
@@ -462,7 +457,7 @@ mod tests {
     fn unary_minus_complex() {
         let res = parse_expr("1 - -(-3 - 1)")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::IntPrim(-3), res);
     }
@@ -471,7 +466,7 @@ mod tests {
     fn unary_minus_float() {
         let res = parse_expr("1 - -(-3.0 - 1)")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::FloatPrim(-3.0), res);
     }
@@ -480,7 +475,7 @@ mod tests {
     fn comparisons() {
         let res = parse_expr("1 <= 1 && 1 < 2 && 2 >= 2 && 2 > 1 && 1 != 2")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::BoolPrim(true), res);
     }
@@ -531,7 +526,7 @@ mod tests {
     fn arithmetic() {
         let res = parse_expr("(5 + 2) * 3 % 4")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::IntPrim(1), res);
     }
@@ -544,7 +539,7 @@ mod tests {
             .unwrap();
         let res = parse_expr("#[0, 0] + 3")
             .unwrap()
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
         assert_eq!(Expr::IntPrim(4), res);
     }
@@ -560,17 +555,17 @@ mod tests {
             .unwrap();
         let res = parse_expr("#[1 - 1, 0] < #[1 * 1, 1]")
             .unwrap()
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
         assert_eq!(Expr::BoolPrim(true), res);
     }
 
     #[test]
     fn logic_cmp() {
-        let runtime = Runtime::default();
+        let mut runtime = Runtime::default();
         let res = parse_expr("5 > 3 && !(2 > 8)")
             .unwrap()
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
         assert_eq!(Expr::BoolPrim(true), res);
     }
@@ -579,10 +574,10 @@ mod tests {
 
     #[test]
     fn casting() {
-        let runtime = Runtime::default();
+        let mut runtime = Runtime::default();
         let res = parse_expr("float(10) / 4.0")
             .unwrap()
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
         assert_eq!(Expr::FloatPrim(2.5), res);
     }
@@ -590,12 +585,14 @@ mod tests {
     #[test]
     fn assignment() {
         let block = parse("waldo = 5 + 5; turtle = 2; 1 + waldo + turtle");
+        println!("BLOCK: {:?}", block);
         assert!(block.is_ok());
         let block = block.unwrap();
         let mut runtime = Runtime::default();
         let addr = &Expr::AddrPrim(0, 0);
-        block.execute(&mut runtime, addr).unwrap();
-        let actual = block.expr.eval(&runtime, addr).unwrap();
+        let actual = block.eval(&mut runtime, addr);
+        println!("actual: {:?}", actual);
+        let actual = actual.unwrap();
         assert_eq!(Expr::IntPrim(13), actual)
     }
 }

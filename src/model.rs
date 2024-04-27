@@ -1,7 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
 use anyhow::{bail, ensure, Context, Result};
-use derive_new::new;
 
 pub const GRID_WIDTH: usize = 13;
 
@@ -156,52 +155,6 @@ impl Runtime {
         }
         Ok(evals)
     }
-
-    fn set_variable(&mut self, statement: &Statement, addr: &Expr) -> Result<()> {
-        match &statement {
-            Statement::Assignment(a) => {
-                let eval = a.value.eval(self, addr)?;
-                let cell = self.cell_mut(addr)?;
-                cell.vars.insert(a.name.clone(), eval);
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(new, Debug)]
-pub struct Block {
-    statements: Vec<Statement>,
-    pub expr: Expr,
-}
-
-impl Block {
-    pub fn execute(&self, runtime: &mut Runtime, addr: &Expr) -> Result<()> {
-        for statement in &self.statements {
-            statement.execute(runtime, addr)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub enum Statement {
-    Assignment(Assignment),
-}
-
-impl Statement {
-    fn execute(&self, runtime: &mut Runtime, addr: &Expr) -> Result<()> {
-        match self {
-            Self::Assignment(_) => runtime.set_variable(self, addr)?
-        };
-        Ok(())
-    }
-}
-
-#[derive(new, Debug)]
-pub struct Assignment {
-    name: String,
-    value: Expr,
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -258,6 +211,8 @@ pub enum Expr {
     Sum(Box<Expr>, Box<Expr>),
 
     Variable(String),
+    Assignment(String, Box<Expr>),
+    Block(Vec<Expr>),
 }
 
 impl Display for Expr {
@@ -267,38 +222,40 @@ impl Display for Expr {
             Self::FloatPrim(v) => write!(f, "FloatPrim({})", v),
             Self::BoolPrim(v) => write!(f, "BoolPrim({})", v),
             Self::StringPrim(v) => write!(f, "StringPrim({})", v),
-            Self::AddrPrim(_, _) => write!(f, "BoolPrim"),
-            Self::Add(_, _) => write!(f, "Add"),
-            Self::Sub(_, _) => write!(f, "Sub"),
-            Self::Mult(_, _) => write!(f, "Mult"),
-            Self::Div(_, _) => write!(f, "Div"),
-            Self::Mod(_, _) => write!(f, "Mod"),
-            Self::Exp(_, _) => write!(f, "Exp"),
+            Self::AddrPrim(..) => write!(f, "BoolPrim"),
+            Self::Add(..) => write!(f, "Add"),
+            Self::Sub(..) => write!(f, "Sub"),
+            Self::Mult(..) => write!(f, "Mult"),
+            Self::Div(..) => write!(f, "Div"),
+            Self::Mod(..) => write!(f, "Mod"),
+            Self::Exp(..) => write!(f, "Exp"),
             Self::Neg(_) => write!(f, "Neg"),
-            Self::LogicAnd(_, _) => write!(f, "LogicAnd"),
-            Self::LogicOr(_, _) => write!(f, "LogicOr"),
+            Self::LogicAnd(..) => write!(f, "LogicAnd"),
+            Self::LogicOr(..) => write!(f, "LogicOr"),
             Self::LogicNot(_) => write!(f, "LogicNot"),
-            Self::RValue(_, _) => write!(f, "RValue"),
-            Self::LValue(_, _) => write!(f, "LValue"),
-            Self::BitwiseAnd(_, _) => write!(f, "BitwiseAnd"),
-            Self::BitwiseOr(_, _) => write!(f, "BitwiseOr"),
-            Self::BitwiseXor(_, _) => write!(f, "BitwiseXor"),
+            Self::RValue(..) => write!(f, "RValue"),
+            Self::LValue(..) => write!(f, "LValue"),
+            Self::BitwiseAnd(..) => write!(f, "BitwiseAnd"),
+            Self::BitwiseOr(..) => write!(f, "BitwiseOr"),
+            Self::BitwiseXor(..) => write!(f, "BitwiseXor"),
             Self::BitwiseNot(_) => write!(f, "BitwiseNot"),
-            Self::BitwiseLeftShift(_, _) => write!(f, "BitwiseLeftShift"),
-            Self::BitwiseRightShift(_, _) => write!(f, "BitwiseRightShift"),
-            Self::Equals(_, _) => write!(f, "Equals"),
-            Self::NotEquals(_, _) => write!(f, "NotEquals"),
-            Self::LessThan(_, _) => write!(f, "LessThan"),
-            Self::LessThanOrEquals(_, _) => write!(f, "LessThanOrEquals"),
-            Self::GreaterThan(_, _) => write!(f, "GreaterThan"),
-            Self::GreaterThanOrEquals(_, _) => write!(f, "GreaterThanOrEquals"),
+            Self::BitwiseLeftShift(..) => write!(f, "BitwiseLeftShift"),
+            Self::BitwiseRightShift(..) => write!(f, "BitwiseRightShift"),
+            Self::Equals(..) => write!(f, "Equals"),
+            Self::NotEquals(..) => write!(f, "NotEquals"),
+            Self::LessThan(..) => write!(f, "LessThan"),
+            Self::LessThanOrEquals(..) => write!(f, "LessThanOrEquals"),
+            Self::GreaterThan(..) => write!(f, "GreaterThan"),
+            Self::GreaterThanOrEquals(..) => write!(f, "GreaterThanOrEquals"),
             Self::CastToInt(_) => write!(f, "CastToInt"),
             Self::CastToFloat(_) => write!(f, "CastToFloat"),
-            Self::Max(_, _) => write!(f, "Max"),
-            Self::Min(_, _) => write!(f, "Min"),
-            Self::Mean(_, _) => write!(f, "Mean"),
-            Self::Sum(_, _) => write!(f, "Sum"),
+            Self::Max(..) => write!(f, "Max"),
+            Self::Min(..) => write!(f, "Min"),
+            Self::Mean(..) => write!(f, "Mean"),
+            Self::Sum(..) => write!(f, "Sum"),
             Self::Variable(v) => write!(f, "Variable({})", v),
+            Self::Assignment(..) => write!(f, "Assignment"),
+            Self::Block(..) => write!(f, "Block"),
         }
     }
 }
@@ -341,7 +298,7 @@ impl Expr {
         }
     }
 
-    pub fn eval_cords(&self, runtime: &Runtime, addr: (i64, i64)) -> Result<Expr> {
+    pub fn eval_cords(&self, runtime: &mut Runtime, addr: (i64, i64)) -> Result<Expr> {
         let (x, y) = addr;
         self.eval(
             runtime,
@@ -350,13 +307,13 @@ impl Expr {
     }
 
     /// Evaluate an Expr, recursing through the AST
-    pub fn eval(&self, runtime: &Runtime, addr: &Expr) -> Result<Expr> {
+    pub fn eval(&self, runtime: &mut Runtime, addr: &Expr) -> Result<Expr> {
         match self {
             Self::IntPrim(_)
             | Self::FloatPrim(_)
             | Self::BoolPrim(_)
             | Self::StringPrim(_)
-            | Self::AddrPrim(_, _) => Ok(self.clone()),
+            | Self::AddrPrim(..) => Ok(self.clone()),
             Self::Add(a, b) => {
                 let (a, b) = &(a.eval(runtime, addr)?, b.eval(runtime, addr)?);
                 let (a, b) = &Self::coerce(a, b);
@@ -641,11 +598,31 @@ impl Expr {
                 Ok(Expr::FloatPrim(sum))
             }
             Self::Variable(v) => {
+                println!("TEST");
                 let cell = runtime.cell(&addr)?;
                 Ok(cell
                     .vars
                     .get(v)
-                    .context("accessed uninitialized variable \"{}\"")?.clone())
+                    .context("accessed uninitialized variable \"{}\"")?
+                    .clone())
+            }
+            Self::Assignment(name, expr) => {
+                let eval = expr.eval(runtime, addr)?;
+                let cell = runtime.cell_mut(addr)?;
+                cell.vars.insert(name.to_string(), eval.clone());
+                let test = cell.vars.get(name);
+                println!("VAR {}: {:?}", name, test);
+                Ok(eval)
+            }
+            Self::Block(exprs) => {
+                let mut last: Option<Expr> = None;
+                for expr in exprs {
+                    last = Some(expr.eval(runtime, addr)?);
+                }
+                if last == None {
+                    bail!("empty block")
+                }
+                Ok(last.unwrap())
             }
         }
     }
@@ -689,6 +666,8 @@ impl Expr {
             Self::Mean(a, b) => format!("mean({}, {})", a.serialize(), b.serialize()),
             Self::Sum(a, b) => format!("sum({}, {})", a.serialize(), b.serialize()),
             Self::Variable(v) => format!("Variable({})", v),
+            Self::Assignment(..) => format!("Assignment"),
+            Self::Block(..) => format!("Block"),
         }
     }
 }
@@ -726,7 +705,7 @@ mod tests {
         let x = Expr::Mult(Box::new(Expr::IntPrim(7)), Box::new(Expr::IntPrim(4)));
         let x = Expr::Add(Box::new(x), Box::new(Expr::IntPrim(3)));
         let x = Expr::Mod(Box::new(x), Box::new(Expr::IntPrim(12)));
-        let x = x.eval_cords(&Runtime::default(), (0, 0)).unwrap();
+        let x = x.eval_cords(&mut Runtime::default(), (0, 0)).unwrap();
         assert_eq!(Expr::IntPrim(7), x);
     }
 
@@ -742,7 +721,7 @@ mod tests {
         let x = Expr::Add(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(1)));
         let x = Expr::RValue(Box::new(x), Box::new(Expr::IntPrim(4)));
         let x = Expr::BitwiseLeftShift(Box::new(x), Box::new(Expr::IntPrim(3)));
-        let x = x.eval_cords(&runtime, (0, 0)).unwrap();
+        let x = x.eval_cords(&mut runtime, (0, 0)).unwrap();
         assert_eq!(Expr::IntPrim(40), x)
     }
 
@@ -761,19 +740,19 @@ mod tests {
         let x = Expr::RValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(0)));
         let y = Expr::RValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(1)));
         let res = Expr::LessThan(Box::new(x), Box::new(y));
-        let res = res.eval_cords(&runtime, (0, 0)).unwrap();
+        let res = res.eval_cords(&mut runtime, (0, 0)).unwrap();
         assert_eq!(Expr::BoolPrim(true), res)
     }
 
     /// sum([1, 2], [5, 3])
     #[test]
     fn sum() {
-        let (runtime, nums) = build_runtime_grid(1, 2, 5, 3);
+        let (mut runtime, nums) = build_runtime_grid(1, 2, 5, 3);
 
         let x = Expr::LValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(2)));
         let y = Expr::LValue(Box::new(Expr::IntPrim(5)), Box::new(Expr::IntPrim(3)));
         let res = Expr::Sum(Box::new(x), Box::new(y))
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
 
         let sum = nums.iter().sum::<i64>();
@@ -783,10 +762,10 @@ mod tests {
     /// sum([1, 2], [5, 3])
     #[test]
     fn sum_parsed() {
-        let (runtime, nums) = build_runtime_grid(1, 2, 5, 3);
+        let (mut runtime, nums) = build_runtime_grid(1, 2, 5, 3);
         let res = parse_expr("sum([1, 2], [5, 3])")
             .unwrap()
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
         let sum = nums.iter().sum::<i64>();
         assert_eq!(Expr::FloatPrim(sum as f64), res)
@@ -800,7 +779,7 @@ mod tests {
             Box::new(Expr::FloatPrim(3.2)),
         );
         let x = Expr::LogicNot(Box::new(x));
-        let x = x.eval_cords(&Runtime::default(), (0, 0)).unwrap();
+        let x = x.eval_cords(&mut Runtime::default(), (0, 0)).unwrap();
         assert_eq!(Expr::BoolPrim(false), x);
     }
 
@@ -809,7 +788,7 @@ mod tests {
     fn casting() {
         let x = Expr::CastToFloat(Box::new(Expr::IntPrim(7)));
         let x = Expr::Div(Box::new(x), Box::new(Expr::IntPrim(2)));
-        let x = x.eval_cords(&Runtime::default(), (0, 0)).unwrap();
+        let x = x.eval_cords(&mut Runtime::default(), (0, 0)).unwrap();
         assert_eq!(Expr::FloatPrim(3.5), x);
     }
 
@@ -908,19 +887,19 @@ mod tests {
         let a = Expr::LValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(2)));
         let b = Expr::LValue(Box::new(Expr::IntPrim(2)), Box::new(Expr::IntPrim(4)));
         let res = Expr::Sum(Box::new(a), Box::new(b))
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
         assert_eq!(Expr::FloatPrim(21.0), res)
     }
 
     #[test]
     fn max() {
-        let (runtime, nums) = build_runtime_grid(50, 90, 1, 35);
+        let (mut runtime, nums) = build_runtime_grid(50, 90, 1, 35);
 
         let x = Expr::LValue(Box::new(Expr::IntPrim(50)), Box::new(Expr::IntPrim(90)));
         let y = Expr::LValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(35)));
         let res = Expr::Max(Box::new(y), Box::new(x))
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
 
         let max = nums.iter().max().unwrap();
@@ -929,12 +908,12 @@ mod tests {
 
     #[test]
     fn min() {
-        let (runtime, nums) = build_runtime_grid(0, 99, 0, 99);
+        let (mut runtime, nums) = build_runtime_grid(0, 99, 0, 99);
 
         let x = Expr::LValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(99)));
         let y = Expr::LValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(99)));
         let res = Expr::Min(Box::new(y), Box::new(x))
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
 
         let min = nums.iter().min().unwrap();
@@ -943,12 +922,12 @@ mod tests {
 
     #[test]
     fn mean() {
-        let (runtime, nums) = build_runtime_grid(7, 24, 2, 15);
+        let (mut runtime, nums) = build_runtime_grid(7, 24, 2, 15);
 
         let x = Expr::LValue(Box::new(Expr::IntPrim(7)), Box::new(Expr::IntPrim(24)));
         let y = Expr::LValue(Box::new(Expr::IntPrim(2)), Box::new(Expr::IntPrim(15)));
         let res = Expr::Mean(Box::new(y), Box::new(x))
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
 
         let mean = nums.iter().sum::<i64>() as f64 / nums.len() as f64;
@@ -958,21 +937,21 @@ mod tests {
     #[test]
     fn access_invalid_range() {
         let x = Expr::LValue(Box::new(Expr::IntPrim(0)), Box::new(Expr::IntPrim(100)));
-        let x = x.eval_cords(&Runtime::default(), (0, 0));
+        let x = x.eval_cords(&mut Runtime::default(), (0, 0));
         assert!(x.is_err());
     }
 
     #[test]
     fn access_empty_cell() {
         let x = Expr::RValue(Box::new(Expr::IntPrim(1)), Box::new(Expr::IntPrim(1)));
-        let x = x.eval_cords(&Runtime::default(), (0, 0));
+        let x = x.eval_cords(&mut Runtime::default(), (0, 0));
         assert!(x.is_err());
     }
 
     #[test]
     fn invalid_prims() {
         let x = Expr::Add(Box::new(Expr::IntPrim(5)), Box::new(Expr::BoolPrim(true)));
-        let x = x.eval_cords(&Runtime::default(), (0, 0));
+        let x = x.eval_cords(&mut Runtime::default(), (0, 0));
         assert!(x.is_err())
     }
 
@@ -980,7 +959,7 @@ mod tests {
     fn invalid_addition() {
         let x = parse_expr("1 + true")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0));
+            .eval_cords(&mut Runtime::default(), (0, 0));
         assert!(x.is_err())
     }
 
@@ -988,7 +967,7 @@ mod tests {
     fn invalid_greater() {
         let x = parse_expr("\"Ruby\" > \"nearly any other language (for me)\"")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0)); // notice this results in a error
+            .eval_cords(&mut Runtime::default(), (0, 0)); // notice this results in a error
         assert!(x.is_err())
     }
 
@@ -996,7 +975,7 @@ mod tests {
     fn invalid_lvalue() {
         let x = parse_expr("[1.5, 2]")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0));
+            .eval_cords(&mut Runtime::default(), (0, 0));
         assert!(x.is_err())
     }
 
@@ -1004,18 +983,18 @@ mod tests {
     fn invalid_shift_left() {
         let x = parse_expr("1 << 2.0")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0));
+            .eval_cords(&mut Runtime::default(), (0, 0));
         assert!(x.is_err());
     }
 
     #[test]
     fn sum2() {
-        let (runtime, nums) = build_runtime_grid(0, 0, 2, 1);
+        let (mut runtime, nums) = build_runtime_grid(0, 0, 2, 1);
         let sum = nums.iter().sum::<i64>();
         let expected = Expr::FloatPrim(sum as f64 + 1.0);
         let res = parse_expr("1 + sum([0, 0], [2, 1])")
             .unwrap()
-            .eval_cords(&runtime, (0, 0))
+            .eval_cords(&mut runtime, (0, 0))
             .unwrap();
         assert_eq!(expected, res)
     }
@@ -1024,7 +1003,7 @@ mod tests {
     fn short_circuit_or() {
         let res = parse_expr("true || 7")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::BoolPrim(true), res);
     }
@@ -1033,7 +1012,7 @@ mod tests {
     fn short_circuit_and() {
         let res = parse_expr("false && 7")
             .unwrap()
-            .eval_cords(&Runtime::default(), (0, 0))
+            .eval_cords(&mut Runtime::default(), (0, 0))
             .unwrap();
         assert_eq!(Expr::BoolPrim(false), res);
     }

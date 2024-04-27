@@ -2,7 +2,7 @@ use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use model::{Expr, Runtime, GRID_WIDTH};
-use parser::{parse, parse_expr};
+use parser::parse;
 use tui::ui;
 use tui_textarea::TextArea;
 
@@ -99,9 +99,8 @@ impl App<'_> {
 
                 match res {
                     Ok(v) => {
-                        v.execute(&mut self.runtime, addr);
-                        ast = Some(v.expr);
-                        eval = Some(ast.clone().unwrap().eval(&self.runtime, addr));
+                        ast = Some(v);
+                        eval = Some(ast.clone().unwrap().eval(&mut self.runtime, addr));
                     }
                     Err(e) => {
                         ast = None;
@@ -128,7 +127,7 @@ impl App<'_> {
                 let addr = &Expr::AddrPrim(row, col);
                 let cell = self.runtime.cell_mut(addr).unwrap();
                 if let Some(ast) = cell.ast.clone() {
-                    let eval = ast.eval(&self.runtime, addr);
+                    let eval = ast.eval(&mut self.runtime, addr);
                     self.runtime.set_cell_eval(addr, Some(eval)).unwrap();
                 }
             }
