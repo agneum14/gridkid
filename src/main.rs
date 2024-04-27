@@ -56,8 +56,7 @@ impl App<'_> {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
-            KeyCode::Esc => self.mode = Mode::Grid,
-            KeyCode::Enter => {
+            KeyCode::Esc => {
                 self.mode = Mode::Grid;
                 self.evaluate();
             }
@@ -80,7 +79,7 @@ impl App<'_> {
     }
 
     fn evaluate(&mut self) {
-        let text = self.editor.lines()[0].clone();
+        let text = self.editor.lines().join("\n");
         let (x, y) = self.cursor;
         let addr = &Expr::AddrPrim(x, y);
 
@@ -91,31 +90,33 @@ impl App<'_> {
         } else if let Ok(v) = text.parse::<i64>() {
             self.runtime.set_cell(addr, &Expr::IntPrim(v)).unwrap();
         } else {
-            if text != "" && text.chars().nth(0).unwrap() == '=' {
-                let text: String = text.chars().skip(1).collect();
-                let res = parse(&text);
-                let eval;
-                let ast;
+            if text != "" {
+                if text.chars().nth(0).unwrap() == '=' {
+                    let text: String = text.chars().skip(1).collect();
+                    let res = parse(&text);
+                    let eval;
+                    let ast;
 
-                match res {
-                    Ok(v) => {
-                        ast = Some(v);
-                        eval = Some(ast.clone().unwrap().eval(&mut self.runtime, addr));
+                    match res {
+                        Ok(v) => {
+                            ast = Some(v);
+                            eval = Some(ast.clone().unwrap().eval(&mut self.runtime, addr));
+                        }
+                        Err(e) => {
+                            ast = None;
+                            eval = Some(Err(e));
+                        }
                     }
-                    Err(e) => {
-                        ast = None;
-                        eval = Some(Err(e));
-                    }
+                    self.runtime.set_cell_ast(addr, ast).unwrap();
+                    self.runtime.set_cell_eval(addr, eval).unwrap();
+                } else {
+                    self.runtime
+                        .set_cell_ast(addr, Some(Expr::StringPrim(text.clone())))
+                        .unwrap();
+                    self.runtime
+                        .set_cell_eval(addr, Some(Ok(Expr::StringPrim(text.clone()))))
+                        .unwrap();
                 }
-                self.runtime.set_cell_ast(addr, ast).unwrap();
-                self.runtime.set_cell_eval(addr, eval).unwrap();
-            } else {
-                self.runtime
-                    .set_cell_ast(addr, Some(Expr::StringPrim(text.clone())))
-                    .unwrap();
-                self.runtime
-                    .set_cell_eval(addr, Some(Ok(Expr::StringPrim(text.clone()))))
-                    .unwrap();
             }
         }
 

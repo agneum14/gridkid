@@ -602,7 +602,6 @@ impl Expr {
                 Ok(Expr::FloatPrim(sum))
             }
             Self::Variable(v) => {
-                println!("TEST");
                 let cell = runtime.cell(&addr)?;
                 Ok(cell
                     .vars
@@ -614,8 +613,6 @@ impl Expr {
                 let eval = expr.eval(runtime, addr)?;
                 let cell = runtime.cell_mut(addr)?;
                 cell.vars.insert(name.to_string(), eval.clone());
-                let test = cell.vars.get(name);
-                println!("VAR {}: {:?}", name, test);
                 Ok(eval)
             }
             Self::Block(exprs) => {
