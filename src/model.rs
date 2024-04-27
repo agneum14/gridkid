@@ -213,6 +213,7 @@ pub enum Expr {
     Variable(String),
     Assignment(String, Box<Expr>),
     Block(Vec<Expr>),
+    IfElse(Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
 impl Display for Expr {
@@ -256,6 +257,7 @@ impl Display for Expr {
             Self::Variable(v) => write!(f, "Variable({})", v),
             Self::Assignment(..) => write!(f, "Assignment"),
             Self::Block(..) => write!(f, "Block"),
+            Self::IfElse(..) => write!(f, "IfElse"),
         }
     }
 }
@@ -624,6 +626,21 @@ impl Expr {
                 }
                 Ok(last.unwrap())
             }
+            Self::IfElse(cond, fst, snd) => {
+                let cond = cond.eval(runtime, addr)?;
+                let eval;
+                match cond {
+                    Self::BoolPrim(v) => {
+                        eval = if v {
+                            fst.eval(runtime, addr)?
+                        } else {
+                            snd.eval(runtime, addr)?
+                        };
+                    }
+                    _ => bail!("non-boolean condition"),
+                }
+                Ok(eval)
+            }
         }
     }
 
@@ -668,6 +685,7 @@ impl Expr {
             Self::Variable(v) => format!("Variable({})", v),
             Self::Assignment(..) => format!("Assignment"),
             Self::Block(..) => format!("Block"),
+            Self::IfElse(..) => format!("IfElse"),
         }
     }
 }

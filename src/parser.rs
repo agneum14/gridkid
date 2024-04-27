@@ -67,6 +67,13 @@ impl Parser {
         }
     }
 
+    fn current(&self) -> TokenKind {
+        self.tokens
+            .get(self.i)
+            .expect("indexed invalid current token")
+            .kind
+    }
+
     fn previous(&self) -> TokenKind {
         self.tokens
             .get(self.i - 1)
@@ -99,7 +106,9 @@ impl Parser {
 
     fn check_no_advance(&mut self, kind: &TokenKind) -> bool {
         let res = self.check(kind);
-        self.i -= 1;
+        if res {
+            self.i -= 1;
+        }
         res
     }
 
@@ -114,7 +123,7 @@ impl Parser {
 
     fn block(&mut self) -> Result<Expr> {
         let mut statements: Vec<Expr> = Vec::new();
-        while self.i < self.tokens.len() {
+        while self.i < self.tokens.len() && self.current() != TokenKind::RightCurly {
             statements.push(self.statement()?);
         }
         Ok(Expr::Block(statements))
@@ -123,8 +132,9 @@ impl Parser {
     fn statement(&mut self) -> Result<Expr> {
         if self.check_no_advance(&TokenKind::Ident) {
             self.assignment()
+        } else if self.check_no_advance(&TokenKind::If) {
+            self.if_else()
         } else {
-            self.i += 1;
             self.expression()
         }
     }
@@ -137,6 +147,19 @@ impl Parser {
         println!("name: {}, value: {:?}", name, value);
         self.demand(&TokenKind::Semicolon)?;
         Ok(Expr::Assignment(name, Box::new(value)))
+    }
+
+    fn if_else(&mut self) -> Result<Expr> {
+        self.demand(&TokenKind::If)?;
+        let cond = self.expression()?;
+        self.demand(&TokenKind::LeftCurly)?;
+        let fst = self.block()?;
+        self.demand(&TokenKind::RightCurly)?;
+        self.demand(&TokenKind::Else)?;
+        self.demand(&TokenKind::LeftCurly)?;
+        let snd = self.block()?;
+        self.demand(&TokenKind::RightCurly)?;
+        Ok(Expr::IfElse(Box::new(cond), Box::new(fst), Box::new(snd)))
     }
 
     fn expression(&mut self) -> Result<Expr> {
@@ -594,5 +617,33 @@ mod tests {
         println!("actual: {:?}", actual);
         let actual = actual.unwrap();
         assert_eq!(Expr::IntPrim(13), actual)
+    }
+
+    #[test]
+    fn conditional_true() {
+        let mut runtime = Runtime::default();
+        runtime
+            .set_cell(&Expr::AddrPrim(2, 1), &Expr::IntPrim(10))
+            .unwrap();
+        runtime
+            .set_cell(&Expr::AddrPrim(2, 0), &Expr::IntPrim(5))
+            .unwrap();
+        let expr = parse("if #[2, 1] > #[2, 0] { 1 } else { 0 }").unwrap();
+        let actual = expr.eval(&mut runtime, &Expr::AddrPrim(0, 0)).unwrap();
+        assert_eq!(Expr::IntPrim(1), actual)
+    }
+
+    #[test]
+    fn conditional_false() {
+        let mut runtime = Runtime::default();
+        runtime
+            .set_cell(&Expr::AddrPrim(2, 1), &Expr::IntPrim(10))
+            .unwrap();
+        runtime
+            .set_cell(&Expr::AddrPrim(2, 0), &Expr::IntPrim(5))
+            .unwrap();
+        let expr = parse("if #[2, 1] < #[2, 0] { 1 } else { 0 }").unwrap();
+        let actual = expr.eval(&mut runtime, &Expr::AddrPrim(0, 0)).unwrap();
+        assert_eq!(Expr::IntPrim(0), actual)
     }
 }

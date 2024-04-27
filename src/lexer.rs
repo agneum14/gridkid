@@ -2,6 +2,10 @@ use anyhow::{bail, Result};
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum TokenKind {
+    If,
+    Else,
+    RightCurly,
+    LeftCurly,
     Ident,
     Semicolon,
     LogicOr,
@@ -182,6 +186,8 @@ impl Lexer {
                 ']' => self.cap_emit(TokenKind::RightSquare),
                 '#' => self.cap_emit(TokenKind::Pound),
                 ',' => self.cap_emit(TokenKind::Comma),
+                '{' => self.cap_emit(TokenKind::LeftCurly),
+                '}' => self.cap_emit(TokenKind::RightCurly),
                 '|' => {
                     self.cap();
                     match self.get() {
@@ -264,6 +270,8 @@ impl Lexer {
                         "min" => self.emit_token(TokenKind::Min),
                         "mean" => self.emit_token(TokenKind::Mean),
                         "sum" => self.emit_token(TokenKind::Sum),
+                        "if" => self.emit_token(TokenKind::If),
+                        "else" => self.emit_token(TokenKind::Else),
                         _ => self.emit_token(TokenKind::Ident),
                     }
                 }
