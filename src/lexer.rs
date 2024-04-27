@@ -2,6 +2,9 @@ use anyhow::{bail, Result};
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum TokenKind {
+    DotDot,
+    For,
+    In,
     If,
     Else,
     RightCurly,
@@ -188,6 +191,11 @@ impl Lexer {
                 ',' => self.cap_emit(TokenKind::Comma),
                 '{' => self.cap_emit(TokenKind::LeftCurly),
                 '}' => self.cap_emit(TokenKind::RightCurly),
+                '.' => {
+                    self.cap();
+                    self.cap_targ('.')?;
+                    self.emit_token(TokenKind::DotDot)
+                }
                 '|' => {
                     self.cap();
                     match self.get() {
@@ -272,6 +280,8 @@ impl Lexer {
                         "sum" => self.emit_token(TokenKind::Sum),
                         "if" => self.emit_token(TokenKind::If),
                         "else" => self.emit_token(TokenKind::Else),
+                        "for" => self.emit_token(TokenKind::For),
+                        "in" => self.emit_token(TokenKind::In),
                         _ => self.emit_token(TokenKind::Ident),
                     }
                 }
@@ -476,6 +486,13 @@ mod tests {
             TokenKind::Int,
         ]
         .as_slice();
+        assert!(cmp_toks(expected, &tokens))
+    }
+
+    #[test]
+    fn dot_dot() {
+        let tokens = lex("..").unwrap();
+        let expected = [TokenKind::DotDot].as_slice();
         assert!(cmp_toks(expected, &tokens))
     }
 }

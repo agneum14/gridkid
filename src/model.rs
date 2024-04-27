@@ -214,6 +214,7 @@ pub enum Expr {
     Assignment(String, Box<Expr>),
     Block(Vec<Expr>),
     IfElse(Box<Expr>, Box<Expr>, Box<Expr>),
+    ForEach(String, Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
 impl Display for Expr {
@@ -258,6 +259,7 @@ impl Display for Expr {
             Self::Assignment(..) => write!(f, "Assignment"),
             Self::Block(..) => write!(f, "Block"),
             Self::IfElse(..) => write!(f, "IfElse"),
+            Self::ForEach(..) => write!(f, "ForEach"),
         }
     }
 }
@@ -641,6 +643,16 @@ impl Expr {
                 }
                 Ok(eval)
             }
+            Self::ForEach(name, start, end, block) => {
+                let (start, end) = (start.eval(runtime, addr)?, end.eval(runtime, addr)?);
+                let evals = runtime.eval_range(&start, &end)?;
+                let mut last: Option<Expr> = None;
+                for eval in evals {
+                    runtime.cell_mut(addr)?.vars.insert(name.to_string(), eval);
+                    last = Some(block.eval(runtime, addr)?);
+                }
+                Ok(last.unwrap()) // safe because there must be at least one eval
+            }
         }
     }
 
@@ -686,6 +698,7 @@ impl Expr {
             Self::Assignment(..) => format!("Assignment"),
             Self::Block(..) => format!("Block"),
             Self::IfElse(..) => format!("IfElse"),
+            Self::ForEach(..) => format!("ForEach"),
         }
     }
 }

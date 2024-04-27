@@ -134,6 +134,8 @@ impl Parser {
             self.assignment()
         } else if self.check_no_advance(&TokenKind::If) {
             self.if_else()
+        } else if self.check_no_advance(&TokenKind::For) {
+            self.for_each()
         } else {
             self.expression()
         }
@@ -144,7 +146,6 @@ impl Parser {
         let name = self.prev_token()?.src.to_owned();
         self.demand(&TokenKind::Equals)?;
         let value = self.expression()?;
-        println!("name: {}, value: {:?}", name, value);
         self.demand(&TokenKind::Semicolon)?;
         Ok(Expr::Assignment(name, Box::new(value)))
     }
@@ -160,6 +161,25 @@ impl Parser {
         let snd = self.block()?;
         self.demand(&TokenKind::RightCurly)?;
         Ok(Expr::IfElse(Box::new(cond), Box::new(fst), Box::new(snd)))
+    }
+
+    fn for_each(&mut self) -> Result<Expr> {
+        self.demand(&TokenKind::For)?;
+        self.demand(&TokenKind::Ident)?;
+        let variable_name = self.prev_token()?.src.to_owned();
+        self.demand(&TokenKind::In)?;
+        let start = self.expression()?;
+        self.demand(&TokenKind::DotDot)?;
+        let end = self.expression()?;
+        self.demand(&TokenKind::LeftCurly)?;
+        let block = self.block()?;
+        self.demand(&TokenKind::RightCurly)?;
+        Ok(Expr::ForEach(
+            variable_name,
+            Box::new(start),
+            Box::new(end),
+            Box::new(block),
+        ))
     }
 
     fn expression(&mut self) -> Result<Expr> {
@@ -608,13 +628,11 @@ mod tests {
     #[test]
     fn assignment() {
         let block = parse("waldo = 5 + 5; turtle = 2; 1 + waldo + turtle");
-        println!("BLOCK: {:?}", block);
         assert!(block.is_ok());
         let block = block.unwrap();
         let mut runtime = Runtime::default();
         let addr = &Expr::AddrPrim(0, 0);
         let actual = block.eval(&mut runtime, addr);
-        println!("actual: {:?}", actual);
         let actual = actual.unwrap();
         assert_eq!(Expr::IntPrim(13), actual)
     }
@@ -645,5 +663,25 @@ mod tests {
         let expr = parse("if #[2, 1] < #[2, 0] { 1 } else { 0 }").unwrap();
         let actual = expr.eval(&mut runtime, &Expr::AddrPrim(0, 0)).unwrap();
         assert_eq!(Expr::IntPrim(0), actual)
+    }
+
+    #[test]
+    fn for_each() {
+        let mut runtime = Runtime::default();
+        runtime
+            .set_cell(&Expr::AddrPrim(4, 0), &Expr::IntPrim(1))
+            .unwrap();
+        runtime
+            .set_cell(&Expr::AddrPrim(4, 1), &Expr::IntPrim(2))
+            .unwrap();
+        runtime
+            .set_cell(&Expr::AddrPrim(4, 2), &Expr::IntPrim(4))
+            .unwrap();
+        runtime
+            .set_cell(&Expr::AddrPrim(4, 3), &Expr::IntPrim(8))
+            .unwrap();
+        let expr = parse("s = 0; for v in [4,0] .. [4,3] { s = s + v; } 1 + s").unwrap();
+        let actual = expr.eval(&mut runtime, &Expr::AddrPrim(0, 0)).unwrap(); 
+        assert_eq!(Expr::FloatPrim(16.0), actual);
     }
 }
